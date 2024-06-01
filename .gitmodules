@@ -1,3 +1,6 @@
 [submodule "util"]
 	path = util
 	url = https://github.com/j-palindrome/util.git
+[submodule "testing/util"]
+	path = testing/util
+	url = https://github.com/j-palindrome/util.git

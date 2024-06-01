@@ -13,6 +13,8 @@ export default class PingPongBuffer {
       const newTexture = twgl.createTexture(gl, {
         width: gl.drawingBufferWidth,
         height: gl.drawingBufferHeight,
+        min: gl.NEAREST,
+        mag: gl.NEAREST,
         ...options
       })
       twgl.setTextureParameters(gl, newTexture, {

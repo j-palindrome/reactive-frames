@@ -7,16 +7,24 @@ import {
 import Reactive, { CanvasGL, compileFragmentShader } from '../../src/index'
 import * as twgl from 'twgl.js'
 
-// console.log(
-//   compileFragmentShader(generator => generator.noise().rotate(Math.PI))
-// )
-
 function App() {
+  const width = 20
   return (
     <>
       <Reactive className='h-screen w-screen'>
-        <CanvasGL name='testing'>
-          <PingPongBuffer name='pingPong' draw={self => self.bind()}>
+        <CanvasGL name='testing' height={width} width={width} noResize>
+          <PingPongBuffer
+            width={width}
+            height={width}
+            name='pingPong'
+            setup={(self, gl) => {
+              twgl.setTextureFromArray(
+                gl,
+                self.input.attachments[0],
+                new Uint8Array(width * width * 4).map(x => Math.random() * 255)
+              )
+            }}
+            draw={self => self.bind()}>
             <Plane
               name='render'
               fragmentShader={
@@ -29,11 +37,12 @@ function App() {
                   //   fragColor = vec4(0, 1, 1, 1);
                   // }
                   vec4 sampleTex = texture(prevBuffer, uv);
-                  if (sampleTex.r > 0.99) {
-                    fragColor = vec4(0, 0, 0, 1);
-                  } else {
-                    fragColor = sampleTex + 0.05;
-                  }
+                  // if (sampleTex.r > 0.99) {
+                  //   fragColor = vec4(0, 0, 0, 1);
+                  // } else {
+                  //   fragColor = sampleTex + 0.01;
+                  // }
+                  fragColor = sampleTex;
                   // fragColor = vec4(0.2, 0.2, 0.2, 0.2) - texture(prevBuffer, uv);
                   // fragColor = vec4(1, 1, 1, 1);
                 }`

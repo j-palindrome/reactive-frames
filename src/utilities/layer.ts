@@ -1,15 +1,20 @@
 import * as twgl from 'twgl.js'
 import _ from 'lodash'
 
-export const generateShape = (type: 'plane') => {
+export const generateShape = (type: 'plane' | 'square' | 'squareCenter') => {
   switch (type) {
     case 'plane':
       return [-1, 1, -1, -1, 1, 1, 1, 1, -1, -1, 1, -1]
+    case 'square':
+      return [0, 0, 0, 1, 1, 1, 1, 1, 0, 0, 1, 0]
+    case 'squareCenter':
+      return [-0.5, -0.5, -0.5, 0.5, 0.5, 0.5, 0.5, 0.5, -0.5, -0.5, 0.5, -0.5]
   }
 }
-export function assembleAttributes<
-  K extends Record<string, twgl.FullArraySpec>
->(template: K, attribs: { [T in keyof K]: number | number[] }[]) {
+export function assembleAttributes<K extends string[]>(
+  template: Record<K[number], twgl.FullArraySpec>,
+  attribs: Record<K[number], number | number[]>[]
+) {
   const newTemplate: twgl.Arrays = {}
   for (let key of Object.keys(template)) {
     newTemplate[key] = {
@@ -31,6 +36,7 @@ export class Layer {
   drawMode: number
   uniforms?: Record<string, any>
   bufferInfo: twgl.BufferInfo
+  instanceCount?: number
 
   lastDraw: number
   private attributes: twgl.Arrays
@@ -43,7 +49,8 @@ export class Layer {
     gl,
     useDefaults = true,
     uniforms,
-    transformFeedback
+    transformFeedback,
+    instanceCount
   }: {
     attributes: twgl.Arrays | ((time: number) => twgl.Arrays)
     vertexShader: string
@@ -60,6 +67,7 @@ export class Layer {
     frameRate?: number
     uniforms?: Record<string, any>
     transformFeedback?: [string, string][]
+    instanceCount?: number
   }) {
     if (useDefaults) {
       vertexShader = `#version 300 es\nprecision highp float;\n` + vertexShader
@@ -90,12 +98,12 @@ export class Layer {
     const thisAttributes =
       typeof attributes === 'function' ? attributes(0) : attributes
     this.bufferInfo = twgl.createBufferInfoFromArrays(gl, thisAttributes)
-
     this.vertexArray = twgl.createVertexArrayInfo(
       gl,
       this.program,
       this.bufferInfo
     )
+
     if (transformFeedback) {
       const feedbackAttributes = _.cloneDeep(thisAttributes)
       for (let [inKey, outKey] of transformFeedback) {
@@ -128,20 +136,15 @@ export class Layer {
         ],
         feedbackToggle: false
       }
-    } else {
-      this.vertexArray = twgl.createVertexArrayInfo(
-        gl,
-        this.program,
-        twgl.createBufferInfoFromArrays(gl, thisAttributes)
-      )
     }
+
     this.attributes = thisAttributes
     this.lastDraw = 0
     this.uniforms = uniforms
+    this.instanceCount = instanceCount
   }
 
   draw(uniforms?: Record<string, any>, attributes?: twgl.Arrays) {
-    this.gl.bindBuffer(this.gl.ARRAY_BUFFER, null)
     this.gl.useProgram(this.program.program)
     if (uniforms) {
       this.uniforms = { ...this.uniforms, ...uniforms }
@@ -178,7 +181,14 @@ export class Layer {
       this.gl.bindTransformFeedback(this.gl.TRANSFORM_FEEDBACK, feedback)
       this.gl.beginTransformFeedback(this.gl.POINTS)
 
-      twgl.drawBufferInfo(this.gl, vertexArray, this.drawMode)
+      twgl.drawBufferInfo(
+        this.gl,
+        vertexArray,
+        this.drawMode,
+        undefined,
+        undefined,
+        this.instanceCount
+      )
 
       this.gl.endTransformFeedback()
       this.gl.bindTransformFeedback(this.gl.TRANSFORM_FEEDBACK, null)
@@ -187,7 +197,14 @@ export class Layer {
         !this.transformFeedback.feedbackToggle
     } else {
       twgl.setBuffersAndAttributes(this.gl, this.program, this.vertexArray)
-      twgl.drawBufferInfo(this.gl, this.vertexArray, this.drawMode)
+      twgl.drawBufferInfo(
+        this.gl,
+        this.vertexArray,
+        this.drawMode,
+        this.vertexArray.numElements,
+        0,
+        this.instanceCount
+      )
     }
   }
 }

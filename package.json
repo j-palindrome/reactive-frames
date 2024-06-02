@@ -12,7 +12,7 @@
   "scripts": {
     "build": "tsc"
   },
-  "version": "0.2.1",
+  "version": "0.2.2",
   "dependencies": {
     "@elemaudio/core": "^3.2.1",
     "@elemaudio/web-renderer": "^3.2.3",

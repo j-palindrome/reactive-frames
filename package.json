@@ -5,6 +5,10 @@
   "description": "A flexible React wrapper for creative coding libraries. Includes wrappers for Processing, Hydra, twgl.js, Regl, Elementary Audio, Web Audio, and more.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/j-palindrome/reactive-frames"
+  },
   "scripts": {
     "build": "tsc"
   },

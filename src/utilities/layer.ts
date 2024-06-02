@@ -11,6 +11,7 @@ export const generateShape = (type: 'plane' | 'square' | 'squareCenter') => {
       return [-0.5, -0.5, -0.5, 0.5, 0.5, 0.5, 0.5, 0.5, -0.5, -0.5, 0.5, -0.5]
   }
 }
+
 export function assembleAttributes<K extends string[]>(
   template: Record<K[number], twgl.FullArraySpec>,
   attribs: Record<K[number], number | number[]>[]

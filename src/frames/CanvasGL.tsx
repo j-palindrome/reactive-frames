@@ -66,11 +66,13 @@ export const Framebuffer = defineChildComponent(
 )
 
 export const PingPongBuffer = defineChildComponent(
-  (options: twgl.TextureOptions, gl: WebGL2RenderingContext) => {
+  (
+    options: ConstructorParameters<typeof PingPongBufferInstance>[0],
+    gl: WebGL2RenderingContext
+  ) => {
     return new PingPongBufferInstance(options, gl)
   },
   self => {
-    console.log('bound')
     self.bind()
   }
 )

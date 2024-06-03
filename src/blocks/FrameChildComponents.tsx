@@ -144,8 +144,8 @@ function TopLevelComponent({
       }
       if (child.props.name) {
         setupCalls.push(child.props.name)
-        Children.forEach(child.props.children, child => childMap(child))
       }
+      Children.forEach(child.props.children, child => childMap(child))
     }
     Children.forEach(children, child => childMap(child))
     allChildrenOrdered.current = setupCalls

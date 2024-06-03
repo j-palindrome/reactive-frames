@@ -6,21 +6,29 @@ export default class PingPongBuffer {
   index: number
   framebuffers: [twgl.FramebufferInfo, twgl.FramebufferInfo]
   gl: WebGL2RenderingContext
-  constructor(options: twgl.TextureOptions, gl: WebGL2RenderingContext) {
+  constructor(
+    options: {
+      options?: (gl: WebGL2RenderingContext) => twgl.TextureOptions
+      width?: number
+      height?: number
+      depth?: number
+      startData?: number[] | (() => number[])
+    },
+    gl: WebGL2RenderingContext
+  ) {
     this.gl = gl
     this.index = 0
+    let glOptions = options.options ? options.options(this.gl) : undefined
+    const fullTextureOptions = {
+      width: options.width ?? gl.drawingBufferWidth,
+      height: options.height ?? gl.drawingBufferHeight,
+      depth: options.depth,
+      min: gl.NEAREST,
+      mag: gl.NEAREST,
+      ...glOptions
+    }
     this.framebuffers = range(2).map(() => {
-      const newTexture = twgl.createTexture(gl, {
-        width: gl.drawingBufferWidth,
-        height: gl.drawingBufferHeight,
-        min: gl.NEAREST,
-        mag: gl.NEAREST,
-        ...options
-      })
-      twgl.setTextureParameters(gl, newTexture, {
-        min: gl.NEAREST,
-        mag: gl.NEAREST
-      })
+      const newTexture = twgl.createTexture(gl, fullTextureOptions)
       return twgl.createFramebufferInfo(
         gl,
         [newTexture],
@@ -30,6 +38,28 @@ export default class PingPongBuffer {
     }) as PingPongBuffer['framebuffers']
     this.input = this.framebuffers[0]
     this.output = this.framebuffers[this.index].attachments[0]
+
+    if (options.startData) {
+      for (let buffer of this.framebuffers) {
+        twgl.setTextureFromArray(
+          this.gl,
+          buffer.attachments[0],
+          typeof options.startData === 'function'
+            ? options.startData()
+            : options.startData,
+          {
+            width: options.width ?? gl.drawingBufferWidth,
+            height: options.height ?? gl.drawingBufferHeight,
+            depth: options.depth
+          }
+        )
+        twgl.setTextureParameters(
+          this.gl,
+          buffer.attachments[0],
+          fullTextureOptions
+        )
+      }
+    }
   }
 
   bind() {

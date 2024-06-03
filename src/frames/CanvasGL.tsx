@@ -3,6 +3,7 @@ import { useRef } from 'react'
 import * as twgl from 'twgl.js'
 import CanvasComponent, { extractCanvasProps } from '../blocks/CanvasComponent'
 import {
+  ChildComponentDefinition,
   FrameComponent,
   defineChildComponent
 } from '../blocks/FrameChildComponents'
@@ -68,7 +69,10 @@ export const PingPongBuffer = defineChildComponent(
   (options: twgl.TextureOptions, gl: WebGL2RenderingContext) => {
     return new PingPongBufferInstance(options, gl)
   },
-  self => self.bind()
+  self => {
+    console.log('bound')
+    self.bind()
+  }
 )
 
 export const Texture = defineChildComponent(

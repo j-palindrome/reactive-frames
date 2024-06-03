@@ -3,7 +3,7 @@
 import { Children, createContext, useEffect, useRef, useState } from 'react'
 import invariant from 'tiny-invariant'
 import { useInvariantContext } from '../utilities/react'
-import { omit } from 'lodash'
+import _, { omit } from 'lodash'
 import {
   AllowedChildren,
   ChildProps,
@@ -132,10 +132,9 @@ function TopLevelComponent({
   // the order to call draw calls in, using the key/string pairings from above
   let childrenDraws = useRef<string[]>([])
   // We have to save setups so that we know what hasn't been created yet. Every time a component calls registerComponent (on creation) this list is updated. Once the draw
-  let childrenSetups = useRef<string[]>([])
+  let allChildrenOrdered = useRef<string[]>([])
 
   useEffect(() => {
-    let drawCalls: any[] = []
     let setupCalls: any[] = []
     const childMap = (child: JSX.Element | JSX.Element[] | undefined) => {
       if (!child) return
@@ -145,13 +144,11 @@ function TopLevelComponent({
       }
       if (child.props.name) {
         setupCalls.push(child.props.name)
-        if (child.props.draw) drawCalls.push(child.props.name)
         Children.forEach(child.props.children, child => childMap(child))
       }
     }
     Children.forEach(children, child => childMap(child))
-    childrenDraws.current = drawCalls
-    childrenSetups.current = setupCalls
+    allChildrenOrdered.current = setupCalls
   })
 
   const [allCreated, setAllCreated] = useState(false)
@@ -173,12 +170,21 @@ function TopLevelComponent({
     }
 
     let allCreated = true
-    for (let key of childrenSetups.current) {
+    for (let key of allChildrenOrdered.current) {
       if (!components.current[key]) {
         allCreated = false
         break
       }
     }
+
+    // assemble a new list of draw calls in the proper order of nesting
+    let newChildrenDraws: string[] = []
+    for (let [name, component] of Object.entries(components.current)) {
+      if (component.draw) newChildrenDraws.push(name)
+    }
+    childrenDraws.current = _.sortBy(newChildrenDraws, name =>
+      allChildrenOrdered.current.indexOf(name)
+    )
 
     setAllCreated(allCreated)
   }
@@ -244,6 +250,16 @@ function TopLevelComponent({
     </TopLevelContext.Provider>
   )
 }
+
+export const Reactive = TopLevelComponent
+
+export type ChildComponentDefinition<Options, Self, Frame> = (
+  props: ChildProps<Options, Self, Frame>
+) => JSX.Element
+
+export type FrameComponentDefinition<Self, Options> = (
+  props: ParentProps<Self, Options>
+) => JSX.Element
 
 export function FrameComponent<Self, Options>({
   options,
@@ -326,8 +342,6 @@ export function ChildComponent<Self, Options, Frame>({
   )
   return <>{self && children}</>
 }
-
-export const Reactive = TopLevelComponent
 
 export const defineChildComponent = <Self, Options, Frame>(
   getSelf: (options: Options, frame: Frame) => Self | Promise<Self>,

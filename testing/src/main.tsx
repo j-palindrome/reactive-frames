@@ -1,6 +1,6 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-import App from './pointCloud.tsx'
+import App from './waves.tsx'
 import './index.css'
 
 ReactDOM.createRoot(document.getElementById('root')!).render(

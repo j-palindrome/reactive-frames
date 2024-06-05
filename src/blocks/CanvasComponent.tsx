@@ -32,8 +32,8 @@ const CanvasComponent = forwardRef<HTMLCanvasElement, CanvasComponentProps>(
     useImperativeHandle(ref, () => innerRef.current)
     const resizeCanvas = () => {
       const { width, height } = innerRef.current.getBoundingClientRect()
-      innerRef.current.width = width
-      innerRef.current.height = height
+      innerRef.current.width = width * devicePixelRatio
+      innerRef.current.height = height * devicePixelRatio
       if (props.webgl) {
         innerRef.current
           .getContext('webgl2')!

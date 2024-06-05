@@ -97,7 +97,7 @@ function useCreateComponent<Self>(
 
   useEffect(() => {
     if (!self || !setupSelf || !allCreated) return
-    setupSelf(self, { elements, props, t: 0, dt: 0 })
+    setupSelf(self, { elements, props, time: 0, deltaTime: 0 })
     return () => {
       cleanupSelf && cleanupSelf(self)
     }
@@ -198,8 +198,8 @@ function TopLevelComponent({
     let interval: number
     const drawFrame = (t: number, dt: number) => {
       const topContext: ReactiveContext = {
-        t,
-        dt,
+        time: t,
+        deltaTime: dt,
         elements: elements.current,
         props: props.current
       }

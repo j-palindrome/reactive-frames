@@ -10,7 +10,8 @@
     "url": "https://github.com/j-palindrome/reactive-frames"
   },
   "scripts": {
-    "build": "tsc"
+    "build": "tsc",
+    "dev": "tsc --watch"
   },
   "version": "0.2.2",
   "dependencies": {

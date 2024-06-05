@@ -2,8 +2,8 @@ export type ReactiveContext<
   Elements extends Record<string, any> = any,
   Props extends Record<string, any> = any
 > = {
-  t: number
-  dt: number
+  time: number
+  deltaTime: number
   elements: Elements
   props: Props
 }

@@ -29,6 +29,7 @@ export default class PingPongBuffer {
     }
     this.framebuffers = range(2).map(() => {
       const newTexture = twgl.createTexture(gl, fullTextureOptions)
+      twgl.setTextureParameters(gl, newTexture, fullTextureOptions)
       return twgl.createFramebufferInfo(
         gl,
         [newTexture],

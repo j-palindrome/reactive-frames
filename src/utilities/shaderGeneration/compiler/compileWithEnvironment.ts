@@ -15,8 +15,8 @@ export function compileWithEnvironment(
 ): string {
   const shaderParams = compileGlsl(transformApplications)
 
-  const frag = `
-  #version 300 es;
+  const frag = /* glsl */ `
+  #version 300 es
   precision highp float;
   ${Object.values(shaderParams.uniforms)
     .map(uniform => {
@@ -52,7 +52,7 @@ export function compileWithEnvironment(
   }
   `
 
-  return frag
+  return frag.replaceAll('texture2D', 'texture')
 }
 
 function compileGlsl(

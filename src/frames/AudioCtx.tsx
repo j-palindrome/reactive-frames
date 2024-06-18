@@ -1,4 +1,8 @@
-import { ChildComponent, FrameComponent } from '../blocks/FrameChildComponents'
+import {
+  ChildComponent,
+  FrameComponent,
+  defineChildComponent
+} from '../blocks/FrameChildComponents'
 import { omit } from 'lodash'
 import { ChildProps, ParentProps } from '../types'
 
@@ -92,3 +96,12 @@ export const BufferSource = (
     {props.children}
   </ChildComponent>
 )
+
+export const FFT = defineChildComponent((options: {}, ctx: AudioContext) => {
+  const node = ctx.createAnalyser()
+  const bufferLength = node.frequencyBinCount
+  const intData = new Uint8Array(bufferLength)
+  const floatData = new Float32Array(bufferLength)
+
+  return { node, intData, floatData }
+})

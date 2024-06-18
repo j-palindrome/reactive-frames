@@ -70,6 +70,8 @@ export const PingPongBuffer = defineChildComponent(
     options: ConstructorParameters<typeof PingPongBufferInstance>[0],
     gl: WebGL2RenderingContext
   ) => {
+    console.log('creating buffer')
+
     return new PingPongBufferInstance(options, gl)
   },
   self => {
@@ -135,6 +137,21 @@ export const Plane = defineChildComponent(
         ]
       : [-1, 1, 1, 1, -1, -1, 1, -1]
 
+    let compiledFragmentShader: string
+    const addedUniforms: string[] = []
+    if (!options.fragmentShader.includes('in vec2 uv;'))
+      addedUniforms.push('in vec2 uv;')
+    else if (!options.fragmentShader.includes('uniform vec2 resolution'))
+      addedUniforms.push('uniform vec2 resolution;')
+    if (options.fragmentShader.includes('precision highp float;')) {
+      compiledFragmentShader = options.fragmentShader.replace(
+        'precision highp float;',
+        `precision highp float;\n${addedUniforms.join('\n')}`
+      )
+    } else {
+      compiledFragmentShader = addedUniforms.join('\n') + options.fragmentShader
+    }
+
     return new LayerInstance({
       ...options,
       attributes: {
@@ -147,8 +164,7 @@ export const Plane = defineChildComponent(
         resolution: [context.drawingBufferWidth, context.drawingBufferHeight]
       },
       vertexShader: defaultVert2DNoResolution,
-      fragmentShader:
-        `in vec2 uv;\nuniform vec2 resolution;\n` + options.fragmentShader,
+      fragmentShader: compiledFragmentShader,
       drawMode: 'triangle strip',
       gl: context
     })

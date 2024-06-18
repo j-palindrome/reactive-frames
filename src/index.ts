@@ -2,7 +2,6 @@ import AudioCtx from './frames/AudioCtx'
 import Call from './frames/Call'
 import CameraInput from './frames/CameraInput'
 import Canvas2D from './frames/Canvas2D'
-import CanvasGL from './frames/CanvasGL'
 import Elementary from './frames/Elementary'
 import Processing from './frames/Processing'
 import Regl from './frames/Regl'
@@ -19,6 +18,16 @@ import {
   FrameComponent,
   ChildComponent
 } from './blocks/FrameChildComponents'
+import CanvasGL, {
+  Mesh,
+  Plane,
+  VideoPlane,
+  PingPongBuffer,
+  Texture,
+  MeshCurve,
+  LineCurve
+} from './frames/CanvasGL'
+import Hydra from './frames/Hydra'
 
 export default Reactive
 export {
@@ -30,13 +39,21 @@ export {
   Call,
   CameraInput,
   Canvas2D,
-  CanvasGL,
   Elementary,
   Processing,
   Regl,
+  CanvasGL,
+  Mesh,
+  Plane,
+  VideoPlane,
+  PingPongBuffer,
+  Texture,
+  MeshCurve,
+  LineCurve,
   ScrollProgress,
   Snap,
-  Svg
+  Svg,
+  Hydra
 }
 
 export { compileFragmentShader }

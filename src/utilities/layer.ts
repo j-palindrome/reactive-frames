@@ -71,10 +71,14 @@ export class Layer {
     instanceCount?: number
   }) {
     if (useDefaults) {
-      vertexShader = `#version 300 es\nprecision highp float;\n` + vertexShader
-      fragmentShader =
-        `#version 300 es\nprecision highp float;\nout vec4 fragColor;\n` +
-        fragmentShader
+      if (!vertexShader.includes('#version 300 es'))
+        vertexShader =
+          `#version 300 es\nprecision highp float;\n` + vertexShader
+      if (!fragmentShader.includes('#version 300 es')) {
+        fragmentShader =
+          `#version 300 es\nprecision highp float;\nout vec4 fragColor;\n` +
+          fragmentShader
+      }
     }
 
     this.gl = gl
@@ -179,8 +183,8 @@ export class Layer {
 
       twgl.setBuffersAndAttributes(this.gl, this.program, vertexArray)
 
-      this.gl.bindTransformFeedback(this.gl.TRANSFORM_FEEDBACK, feedback)
-      this.gl.beginTransformFeedback(this.gl.POINTS)
+      // this.gl.bindTransformFeedback(this.gl.TRANSFORM_FEEDBACK, feedback)
+      // this.gl.beginTransformFeedback(this.gl.POINTS)
 
       twgl.drawBufferInfo(
         this.gl,
@@ -191,8 +195,8 @@ export class Layer {
         this.instanceCount
       )
 
-      this.gl.endTransformFeedback()
-      this.gl.bindTransformFeedback(this.gl.TRANSFORM_FEEDBACK, null)
+      // this.gl.endTransformFeedback()
+      // this.gl.bindTransformFeedback(this.gl.TRANSFORM_FEEDBACK, null)
 
       this.transformFeedback.feedbackToggle =
         !this.transformFeedback.feedbackToggle

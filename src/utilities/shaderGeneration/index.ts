@@ -19,5 +19,7 @@ export const compileFragmentShader = (
   generator: (input: typeof fragmentGenerators) => Glsl
 ) => {
   const generated = generator(fragmentGenerators)
+  console.log(compileWithEnvironment(generated.transforms))
+
   return compileWithEnvironment(generated.transforms)
 }

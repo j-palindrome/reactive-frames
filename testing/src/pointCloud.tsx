@@ -1,6 +1,6 @@
 import range from 'lodash/range'
 import { Mesh } from '../../src/frames/CanvasGL'
-import Reactive, { Call, CanvasGL } from '../../src/index'
+import { Reactive, Call, CanvasGL } from '../../src/index'
 import { useEventListener } from '../../src/utilities/react'
 import { useRef } from 'react'
 import { flipY } from '../util/src/shaders/manipulation'

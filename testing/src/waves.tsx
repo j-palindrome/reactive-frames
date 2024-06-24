@@ -1,5 +1,5 @@
 import { range } from 'lodash'
-import Reactive, { CanvasGL } from '../../src'
+import { Reactive, CanvasGL } from '../../src'
 import * as twgl from 'twgl.js'
 import {
   Mesh,

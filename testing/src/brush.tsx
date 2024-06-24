@@ -4,7 +4,7 @@ import {
   defaultVert2D,
   hash
 } from '../util/src/shaders/utilities'
-import Reactive, { CanvasGL } from '../../src'
+import { Reactive, CanvasGL } from '../../src'
 import { Mesh } from '../../src/frames/CanvasGL'
 import { range } from 'lodash'
 import { arc, arcTangent } from '../util/src/geometry/geometry'

@@ -1,4 +1,4 @@
-import Reactive, { Hydra } from '../../src'
+import { Reactive, Hydra } from '../../src'
 
 export default function HydraExample() {
   return (

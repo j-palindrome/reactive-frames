@@ -2,7 +2,7 @@ import { arc, arcTangent } from '../util/src/geometry/geometry'
 import { wrapAt1 } from '../util/src/shaders/manipulation'
 import { PI } from '../util/src/shaders/utilities'
 import range from 'lodash/range'
-import Reactive, { AudioCtx, CanvasGL } from '../../src'
+import { Reactive, AudioCtx, CanvasGL } from '../../src'
 import { FFT, MicInput } from '../../src/frames/AudioCtx'
 import {
   Mesh,
@@ -12,7 +12,7 @@ import {
   VideoPlane
 } from '../../src/frames/CanvasGL'
 import { generateShape } from '../../src/utilities/layer'
-import { rotate2d } from '../../src/utilities/shaders'
+import { cubicBezier, rotate2d } from '../../src/utilities/shaders'
 import * as twgl from 'twgl.js'
 
 const count = 1000
@@ -354,7 +354,8 @@ export default function Sines() {
               data: range(100)
             }
           }}
-          vertexShader={glsl`
+          vertexShader={
+            /* glsl */ `
             in float index;
             uniform float size;
             uniform float instances;
@@ -363,7 +364,6 @@ export default function Sines() {
 
             ${PI}
             ${cubicBezier}
-            ${arcShader}
 
             void main() {
               float y = float(gl_InstanceID) / instances;
@@ -378,14 +378,17 @@ export default function Sines() {
               gl_PointSize = 10.0;
               v_progress = progress;
             }
-            `}
-          fragmentShader={glsl`
+            `
+          }
+          fragmentShader={
+            /* glsl */ `
             precision highp float;
             in float v_progress;
             void main() {
               fragColor = vec4(1, 1, 1, 0.5 * (1.0 - v_progress));
             }
-            `}
+            `
+          }
           draw={(self, gl, { elements }) => {
             elements.particleSystem.unbind()
             self.draw({

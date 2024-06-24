@@ -4,7 +4,7 @@ import {
   defaultVert2D,
   hash
 } from '../util/src/shaders/utilities'
-import Reactive, { AudioCtx, CanvasGL } from '../../src'
+import { Reactive, AudioCtx, CanvasGL } from '../../src'
 import {
   Mesh,
   PingPongBuffer,

@@ -29,8 +29,8 @@ import CanvasGL, {
 } from './frames/CanvasGL'
 import Hydra from './frames/Hydra'
 
-export default Reactive
 export {
+  Reactive,
   FrameComponent,
   ChildComponent,
   defineChildComponent,

@@ -42,7 +42,6 @@ const CanvasComponent = forwardRef<HTMLCanvasElement, CanvasComponentProps>(
     }
     useEventListener('resize', () => {
       if (props.noResize || props.hidden) return
-      console.log('resizing')
       resizeCanvas()
     })
     useEffect(() => {

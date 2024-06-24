@@ -5,7 +5,7 @@ import {
 } from '../blocks/FrameChildComponents'
 import { omit } from 'lodash'
 import type p5 from 'p5'
-import { useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { CanvasComponentProps, ParentProps } from '../types'
 
 const Processing = (
@@ -17,6 +17,7 @@ const Processing = (
   >
 ) => {
   const canvasRef = useRef<HTMLCanvasElement>(null!)
+
   return (
     <>
       <CanvasComponent

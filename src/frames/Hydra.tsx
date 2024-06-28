@@ -3,7 +3,7 @@ import CanvasComponent, { extractCanvasProps } from '../blocks/CanvasComponent'
 import { FrameComponent } from '../blocks/FrameChildComponents'
 import { omit } from 'lodash'
 import { CanvasComponentProps, ParentProps } from '../types'
-import HydraInstance from 'hydra-synth'
+import type HydraInstance from 'hydra-synth'
 
 const Hydra = (
   props: ParentProps<Omit<CanvasComponentProps, 'type'>, HydraInstance['synth']>
@@ -14,7 +14,8 @@ const Hydra = (
       <CanvasComponent ref={canvasRef} {...extractCanvasProps(props)} />
       <FrameComponent
         options={omit(props, 'children')}
-        getSelf={options => {
+        getSelf={async options => {
+          const { default: HydraInstance } = await import('hydra-synth')
           const hydra = new HydraInstance({
             canvas: canvasRef.current,
             width: options.width,

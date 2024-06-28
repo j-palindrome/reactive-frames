@@ -16,8 +16,10 @@
     "outDir": "dist",
     "declaration": true,
     "noImplicitAny": false,
+
     "paths": {
       "@/*": ["./*"]
     }
-  }
+  },
+  "include": ["src/*"]
 }

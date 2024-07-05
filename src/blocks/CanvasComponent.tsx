@@ -15,7 +15,8 @@ export const extractCanvasProps = (
       'id',
       'noResize',
       'hidden',
-      'webgl'
+      'webgl',
+      'onResize'
     )
   }
 }
@@ -39,8 +40,13 @@ const CanvasComponent = forwardRef<HTMLCanvasElement, CanvasComponentProps>(
           .getContext('webgl2')!
           .viewport(0, 0, innerRef.current.width, innerRef.current.height)
       }
+      if (props.onResize) {
+        props.onResize(innerRef.current)
+      }
     }
     useEventListener('resize', () => {
+      console.log('window is resized')
+
       if (props.noResize || props.hidden) return
       resizeCanvas()
     })

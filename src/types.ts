@@ -1,3 +1,5 @@
+import { RefObject } from 'react'
+
 export type ReactiveContext<
   Elements extends Record<string, any> = any,
   Props extends Record<string, any> = any
@@ -41,4 +43,5 @@ export type CanvasComponentProps = {
   noResize?: true
   hidden?: boolean
   webgl?: boolean
+  onResize?: (self: HTMLCanvasElement) => void
 }

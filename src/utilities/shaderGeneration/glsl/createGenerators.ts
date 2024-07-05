@@ -2,9 +2,9 @@ import {
   ProcessedTransformDefinition,
   TransformDefinition,
   TransformDefinitionType
-} from './transformDefinitions.js'
+} from './transformDefinitions'
 import { Glsl } from './Glsl'
-import ImmutableList from './ImmutableList.js'
+import ImmutableList from './ImmutableList'
 
 type Generator = (...args: unknown[]) => Glsl
 

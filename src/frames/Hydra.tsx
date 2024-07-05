@@ -8,27 +8,55 @@ import type HydraInstance from 'hydra-synth'
 const Hydra = (
   props: ParentProps<Omit<CanvasComponentProps, 'type'>, HydraInstance['synth']>
 ) => {
-  const canvasRef = useRef<HTMLCanvasElement>(null!)
+  // const canvasRef = useRef<HTMLCanvasElement>(null!)
+  const hydraRef = useRef<any>(null)
+
   return (
     <>
-      <CanvasComponent ref={canvasRef} {...extractCanvasProps(props)} />
+      {/* <CanvasComponent
+        ref={canvasRef}
+        {...extractCanvasProps(props)}
+        onResize={self => {
+          if (!hydraRef.current) return
+          hydraRef.current.width = self.width
+          hydraRef.current.height = self.height
+          hydraRef.current.synth.width = self.width
+          hydraRef.current.synth.height = self.height
+          console.log('resized', hydraRef.current)
+        }}
+      /> */}
       <FrameComponent
         options={omit(props, 'children')}
+        cleanupSelf={self => {
+          hydraRef.current.synth.hush()
+          hydraRef.current.canvas.remove()
+        }}
         getSelf={async options => {
           const { default: HydraInstance } = await import('hydra-synth')
           const hydra = new HydraInstance({
-            canvas: canvasRef.current,
             width: options.width,
             height: options.height,
             autoLoop: true,
-            makeGlobal: false
+            makeGlobal: false,
+            detectAudio: false,
+            ...options
           })
+          hydraRef.current = hydra
 
-          document
-            .querySelector(
-              'canvas[style="width: 100px; height: 80px; position: absolute; right: 0px; bottom: 0px;"]'
-            )
-            ?.remove()
+          if (options.className) {
+            const c = hydra.canvas as HTMLCanvasElement
+            console.log('adding classes', options.className)
+
+            c.classList.add(...props.className.split(' '))
+          }
+
+          hydraRef.current = hydra
+
+          // document
+          //   .querySelector(
+          //     'canvas[style="width: 100px; height: 80px; position: absolute; right: 0px; bottom: 0px;"]'
+          //   )
+          //   ?.remove()
           return hydra.synth
         }}>
         {props.children}

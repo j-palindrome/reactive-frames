@@ -13,7 +13,7 @@
     "build": "tsc",
     "dev": "tsc --watch"
   },
-  "version": "0.2.9",
+  "version": "0.2.10",
   "dependencies": {
     "@elemaudio/core": "^3.2.1",
     "@elemaudio/web-renderer": "^3.2.3",

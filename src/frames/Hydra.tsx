@@ -1,5 +1,4 @@
 import { useRef } from 'react'
-import CanvasComponent, { extractCanvasProps } from '../blocks/CanvasComponent'
 import { FrameComponent } from '../blocks/FrameChildComponents'
 import { omit } from 'lodash'
 import { CanvasComponentProps, ParentProps } from '../types'
@@ -50,12 +49,6 @@ const Hydra = (
           }
 
           hydraRef.current = hydra
-
-          // document
-          //   .querySelector(
-          //     'canvas[style="width: 100px; height: 80px; position: absolute; right: 0px; bottom: 0px;"]'
-          //   )
-          //   ?.remove()
           return hydra.synth
         }}>
         {props.children}

@@ -70,8 +70,6 @@ export const PingPongBuffer = defineChildComponent(
     options: ConstructorParameters<typeof PingPongBufferInstance>[0],
     gl: WebGL2RenderingContext
   ) => {
-    console.log('creating buffer')
-
     return new PingPongBufferInstance(options, gl)
   },
   self => {

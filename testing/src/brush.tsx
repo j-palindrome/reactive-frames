@@ -15,8 +15,6 @@ import * as twgl from 'twgl.js'
 import { shape, toAngle } from '../util/src/geometry/geometry'
 import { rotate2d } from '../../src/utilities/shaders'
 
-console.log(twgl.primitives.createXYQuadVertices(0.4))
-
 export default function App() {
   const count = 1000
   return (

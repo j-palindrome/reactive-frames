@@ -44,7 +44,6 @@ export function formatArguments(
             try {
               return arg(props)
             } catch (e) {
-              console.log('ERROR', e)
               return input.default
             }
           }

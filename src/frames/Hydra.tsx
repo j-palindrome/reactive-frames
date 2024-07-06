@@ -44,10 +44,9 @@ const Hydra = (
           hydraRef.current = hydra
 
           if (options.className) {
+            // @ts-ignore
             const c = hydra.canvas as HTMLCanvasElement
-            console.log('adding classes', options.className)
-
-            c.classList.add(...props.className.split(' '))
+            c.classList.add(...options.className.split(' '))
           }
 
           hydraRef.current = hydra

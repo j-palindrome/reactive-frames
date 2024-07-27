@@ -27,7 +27,7 @@ const Processing = (
         webgl={props.type === 'webgl'}
         onResize={canvas => {
           if (!pRef.current) return
-          pRef.current.resizeCanvas(canvas.height, canvas.width)
+          pRef.current.resizeCanvas(canvas.width, canvas.height)
         }}
       />
       <FrameComponent

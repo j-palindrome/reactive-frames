@@ -17,6 +17,7 @@ const Processing = (
   >
 ) => {
   const canvasRef = useRef<HTMLCanvasElement>(null!)
+  const pRef = useRef<any>(null!)
 
   return (
     <>
@@ -24,6 +25,10 @@ const Processing = (
         ref={canvasRef}
         {...extractCanvasProps(props)}
         webgl={props.type === 'webgl'}
+        onResize={canvas => {
+          if (!pRef.current) return
+          pRef.current.resizeCanvas(canvas.height, canvas.width)
+        }}
       />
       <FrameComponent
         options={omit(props, 'children')}
@@ -31,6 +36,7 @@ const Processing = (
           const p5 = await import('p5')
 
           return new p5.default((p: p5) => {
+            pRef.current = p
             // disable draw and setup, they get handled in the previous contexts
             p.setup = () => {
               p.noLoop()

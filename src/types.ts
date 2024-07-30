@@ -14,7 +14,7 @@ export type DepsOptions = any[] | number | (() => number)
 export type ParentProps<Props, Self> = Props & {
   name: string
   draw?: (self: Self, context: ReactiveContext) => void
-  setup?: (self: Self, context: Omit<ReactiveContext, 'time'>) => void
+  setup?: (self: Self, context: ReactiveContext) => void
   deps?: DepsOptions
 } & React.PropsWithChildren
 

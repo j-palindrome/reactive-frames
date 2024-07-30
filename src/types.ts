@@ -21,11 +21,7 @@ export type ParentProps<Props, Self> = Props & {
 export type ChildProps<Props, Self, Parent> = Props & {
   name: string
   draw?: (self: Self, parent: Parent, context: ReactiveContext) => void
-  setup?: (
-    self: Self,
-    parent: Parent,
-    context: Omit<ReactiveContext, 'time'>
-  ) => void
+  setup?: (self: Self, parent: Parent, context: ReactiveContext) => void
   deps?: DepsOptions
 } & React.PropsWithChildren
 

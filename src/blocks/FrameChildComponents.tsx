@@ -122,12 +122,14 @@ function TopLevelComponent({
   children,
   loop = true,
   className,
-  style
+  style,
+  showInfo
 }: {
   children?: AllowedChildren
   loop?: boolean | number
   className?: string
   style?: React.CSSProperties
+  showInfo?: true
 }) {
   // the order to call draw calls in, using the key/string pairings from above
   let childrenDraws = useRef<string[]>([])
@@ -235,6 +237,26 @@ function TopLevelComponent({
       if (interval) window.clearInterval(interval)
     }
   }, [allCreated, loop, components])
+
+  const clickList = useRef<[number, number][]>([])
+  useEffect(() => {
+    if (!showInfo) return
+    window.addEventListener('click', ev => {
+      if (ev.altKey) {
+        clickList.current = []
+      } else if (ev.shiftKey) {
+        clickList.current.splice(clickList.current.length - 1, 1)
+      } else {
+        clickList.current.push([
+          ev.clientX / window.innerWidth,
+          ev.clientY / window.innerHeight
+        ])
+      }
+      window.navigator.clipboard.writeText(
+        `[${clickList.current.map(x => `[${x[0]}, ${x[1]}]`).join(', ')}]`
+      )
+    })
+  }, [showInfo])
 
   return (
     <TopLevelContext.Provider

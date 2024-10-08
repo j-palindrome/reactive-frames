@@ -14,8 +14,14 @@ importers:
       '@elemaudio/web-renderer':
         specifier: ^3.2.3
         version: 3.2.3
+      '@types/animejs':
+        specifier: ^3.1.12
+        version: 3.1.12
+      animejs:
+        specifier: ^3.2.2
+        version: 3.2.2
       framer-motion:
-        specifier: ^11.1.7
+        specifier: ^11.2.6
         version: 11.2.6(react-dom@18.3.1)(react@18.3.1)
       hydra-synth:
         specifier: ^1.3.29
@@ -81,6 +87,9 @@ importers:
       '@types/three':
         specifier: ^0.165.0
         version: 0.165.0
+      animejs:
+        specifier: ^3.2.2
+        version: 3.2.2
       lodash:
         specifier: ^4.17.21
         version: 4.17.21
@@ -862,6 +871,10 @@ packages:
   /@tweenjs/tween.js@23.1.2:
     resolution: {integrity: sha512-kMCNaZCJugWI86xiEHaY338CU5JpD0B97p1j1IKNn/Zto8PgACjQx0UxbHjmOcLl/dDOBnItwD07KmCs75pxtQ==}
 
+  /@types/animejs@3.1.12:
+    resolution: {integrity: sha512-fpdH+ZtlO0kqjTOqRaBdsEmvpRNOayI8k4EVkEtitL5l6wducDOXk0rgQgfZqWf/ZX9DzXrHf257S5i9xTcISQ==}
+    dev: false
+
   /@types/babel__core@7.20.5:
     resolution: {integrity: sha512-qoQprZvz5wQFJwMDqeseRXWv3rqMvhgpbXFfVyWhbx9X47POIA6i/+dXefEmZKoAgOaTdaIgNSMqMIU61yRyzA==}
     dependencies:
@@ -1124,6 +1137,10 @@ packages:
       json-schema-traverse: 0.4.1
       uri-js: 4.4.1
     dev: true
+
+  /animejs@3.2.2:
+    resolution: {integrity: sha512-Ao95qWLpDPXXM+WrmwcKbl6uNlC5tjnowlaRYtuVDHHoygjtIPfDUoK9NthrlZsQSKjZXlmji2TrBUAVbiH0LQ==}
+    dev: false
 
   /ansi-colors@4.1.3:
     resolution: {integrity: sha512-/6w/C21Pm1A7aZitlI5Ni/2J6FFQN8i1Cvz3kHABAAbw93v/NlvKdVOqz7CCWz/3iv/JplRSEEZ83XION15ovw==}

@@ -101,7 +101,7 @@ function useCreateComponent<Self>(
     return () => {
       cleanupSelf && cleanupSelf(self)
     }
-  }, [allCreated])
+  }, [allCreated, options])
   return { self }
 }
 
@@ -139,19 +139,21 @@ function TopLevelComponent({
   useEffect(() => {
     let setupCalls: any[] = []
     const childMap = (child: JSX.Element | JSX.Element[] | undefined) => {
-      if (!child) return
+      if (!child || !child['props']) return
       if (child instanceof Array) {
         child.forEach(child => childMap(child))
         return
       }
+
       if (child.props.name) {
         setupCalls.push(child.props.name)
       }
       Children.forEach(child.props.children, child => childMap(child))
     }
+
     Children.forEach(children, child => childMap(child))
     allChildrenOrdered.current = setupCalls
-  })
+  }, [children])
 
   const [allCreated, setAllCreated] = useState(false)
 
@@ -362,7 +364,7 @@ export function ChildComponent<Self, Options, Frame>({
     options.deps,
     cleanupSelf
   )
-  return <>{self && children}</>
+  return <>{children}</>
 }
 
 export const defineChildComponent = <Self, Options, Frame>(

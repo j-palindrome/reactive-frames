@@ -28,6 +28,10 @@ import CanvasGL, {
   LineCurve
 } from './frames/CanvasGL'
 import Hydra from './frames/Hydra'
+import FramerSequence from './frames/FramerMotion'
+import { FramerDiv, FramerObject, FramerValue } from './frames/FramerMotion'
+import Anime from './frames/Anime'
+import { AnimeDiv, AnimeObject } from './frames/Anime'
 
 export {
   Reactive,
@@ -53,7 +57,14 @@ export {
   ScrollProgress,
   Snap,
   Svg,
-  Hydra
+  Hydra,
+  FramerSequence as FramerMotion,
+  FramerDiv,
+  FramerObject,
+  FramerValue,
+  Anime,
+  AnimeDiv,
+  AnimeObject
 }
 
 export { compileFragmentShader }

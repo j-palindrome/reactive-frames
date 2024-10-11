@@ -102,6 +102,8 @@ export class Layer {
     )
     const thisAttributes =
       typeof attributes === 'function' ? attributes(0) : attributes
+    console.log('creating:', thisAttributes)
+
     this.bufferInfo = twgl.createBufferInfoFromArrays(gl, thisAttributes)
     this.vertexArray = twgl.createVertexArrayInfo(
       gl,
@@ -180,23 +182,17 @@ export class Layer {
       const vertexArray = this.transformFeedback.feedbackToggle
         ? this.transformFeedback.feedbackVertexArray
         : this.vertexArray
+      // const vertexArray = this.vertexArray
 
       twgl.setBuffersAndAttributes(this.gl, this.program, vertexArray)
 
-      // this.gl.bindTransformFeedback(this.gl.TRANSFORM_FEEDBACK, feedback)
-      // this.gl.beginTransformFeedback(this.gl.POINTS)
+      this.gl.bindTransformFeedback(this.gl.TRANSFORM_FEEDBACK, feedback)
+      this.gl.beginTransformFeedback(this.drawMode)
 
-      twgl.drawBufferInfo(
-        this.gl,
-        vertexArray,
-        this.drawMode,
-        undefined,
-        undefined,
-        this.instanceCount
-      )
+      twgl.drawBufferInfo(this.gl, vertexArray, this.drawMode)
 
-      // this.gl.endTransformFeedback()
-      // this.gl.bindTransformFeedback(this.gl.TRANSFORM_FEEDBACK, null)
+      this.gl.endTransformFeedback()
+      this.gl.bindTransformFeedback(this.gl.TRANSFORM_FEEDBACK, null)
 
       this.transformFeedback.feedbackToggle =
         !this.transformFeedback.feedbackToggle

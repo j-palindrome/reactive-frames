@@ -7,12 +7,12 @@ import {
 import { Reactive, CanvasGL } from '../../src'
 import { Mesh } from '../../src/frames/CanvasGL'
 import { range } from 'lodash'
-import { arc, arcTangent } from '../util/src/geometry/geometry'
+import { arc, arcTangent } from '../util/src/geometry'
 import { rad } from '../util/src/shaders/manipulation'
 import { rad as radFunc } from '../util/src/math'
 import { generateShape } from '../../asemic/mesh'
 import * as twgl from 'twgl.js'
-import { shape, toAngle } from '../util/src/geometry/geometry'
+import { shape, toAngle } from '../util/src/geometry'
 import { rotate2d } from '../../src/utilities/shaders'
 
 export default function App() {
@@ -43,8 +43,7 @@ export default function App() {
             vertex: {
               numComponents: 2,
               data: generateShape('squareCenter')
-            },
-            ...twgl.primitives.createXYQuadVertices(1)
+            }
           }}
           vertexShader={
             /*glsl*/ `

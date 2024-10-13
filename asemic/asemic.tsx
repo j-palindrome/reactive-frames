@@ -116,12 +116,12 @@ export function Brush({
     const kf = new Float32Array(
       keyframes.flatMap((keyframe, i) => {
         return keyframe.curve.flatMap((x, i) => {
-          if (i > 0 && i < keyframe.curve.length - 1) {
-            x = [
-              (x[0] + keyframe.curve[i + 1][0]) / 2,
-              (x[1] + keyframe.curve[i + 1][1]) / 2
-            ]
-          }
+          // if (i > 0 && i < keyframe.curve.length - 1) {
+          //   x = [
+          //     (x[0] + keyframe.curve[i + 1][0]) / 2,
+          //     (x[1] + keyframe.curve[i + 1][1]) / 2
+          //   ]
+          // }
           return [...x, keyframe.thickness[i], 0]
         })
       })
@@ -151,12 +151,6 @@ export function Brush({
     meshRef.current.material.uniforms.progress.value = time
     meshRef.current.material.uniformsNeedUpdate = true
   })
-
-  useThree(state => {
-    console.log(state.camera)
-  })
-
-  console.log(keyframes)
 
   return (
     <instancedMesh

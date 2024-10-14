@@ -16,6 +16,13 @@ const tempObject = new THREE.Object3D()
 
 export default function Asemic() {
   const points = useRef<[number, number][]>([])
+  // const points0 = [
+  //   [1, 0],
+  //   [0, 0.25],
+  //   [1, 0.5],
+  //   [0, 0.75],
+  //   [1, 1]
+  // ]
   const points0 = [
     [1, 0],
     [0, 0.5],
@@ -57,17 +64,26 @@ export default function Asemic() {
           keyframes={[
             {
               curves: range(1).map(() =>
-                range(3).map(x => ({
+                range(points0.length).map(x => ({
                   position: new Vector2(...points0[x]),
                   thickness: 1,
                   color: new THREE.Color('white'),
-                  alpha: 0.1
+                  alpha: 0.25 / 10
+                }))
+              )
+            },
+            {
+              curves: range(1).map(() =>
+                range(points0.length).map(x => ({
+                  position: new Vector2().random(),
+                  thickness: 1,
+                  color: new THREE.Color('white'),
+                  alpha: 0.25 / 10
                 }))
               )
             }
           ]}
           size={10}
-          spacing={10}
         />
       </Canvas>
     </>
@@ -100,7 +116,10 @@ export function Brush({
   }
   degree?: 2 | 3
 }) {
-  console.log('1', cloneDeep(keyframes))
+  const resolution = useThree(scene =>
+    scene.gl.getDrawingBufferSize(new THREE.Vector2())
+  )
+
   const meshRef = useRef<
     THREE.InstancedMesh<THREE.PlaneGeometry, THREE.ShaderMaterial>
   >(null!)
@@ -108,26 +127,35 @@ export function Brush({
   const curvesCount = keyframes[0].curves.length
   const controlPointsCount = keyframes[0].curves[0].length
   const aspectRatio = window.innerWidth / window.innerHeight
-  const curveProgressSamples = 10
+  const curveProgressSamples = controlPointsCount * 10
 
   let maxLength = 0
   const progress = keyframes.flatMap(x =>
     x.curves.flatMap(curve => {
-      const i = 0
-      const curvePath = new THREE.QuadraticBezierCurve(
-        curve[i].position.clone().lerp(curve[i + 1].position, 0.5),
-        curve[i + 1].position,
-        curve[i + 1].position.clone().lerp(curve[i + 2].position, 0.5)
-      )
+      const curvePath = new THREE.CurvePath()
+      const subdivisions = (controlPointsCount - degree) / (degree - 1)
+      for (let i of range(subdivisions)) {
+        curvePath.add(
+          new THREE.QuadraticBezierCurve(
+            curve[i].position.clone().lerp(curve[i + 1].position, 0.5),
+            curve[i + 1].position,
+            curve[i + 1].position.clone().lerp(curve[i + 2].position, 0.5)
+          )
+        )
+      }
+      // let i = 0
+      // const curvePath = new THREE.QuadraticBezierCurve(
+      //   curve[i].position.clone().lerp(curve[i + 1].position, 0.5),
+      //   curve[i + 1].position,
+      //   curve[i + 1].position.clone().lerp(curve[i + 2].position, 0.5)
+      // )
 
       const length = curvePath.getLength()
       if (length > maxLength) maxLength = length
 
-      return (
-        curvePath
-          .getLengths(curveProgressSamples - 1)
-          // @ts-ignore
-          .map(x => curvePath.getUtoTmapping(x / length))
+      return range(curveProgressSamples).map(i =>
+        // @ts-ignore
+        curvePath.getUtoTmapping(i / (curveProgressSamples - 1))
       )
     })
   )
@@ -181,17 +209,17 @@ export function Brush({
     const pointsTex = createTexture(point => {
       return [...point.position.toArray(), point.thickness ?? 1, 0]
     }, THREE.RGBAFormat)
-    console.log(pointsTex.source)
 
     const colorTex = createTexture(
       point => [...(point.color?.toArray() ?? [1, 1, 1]), point.alpha ?? 1],
       THREE.RGBAFormat
     )
     return { pointsTex, colorTex, progressTex }
-  }, [])
+  }, [keyframes])
 
   useFrame(scene => {
-    const time = Math.sin((scene.clock.getElapsedTime() % 1) * 1) * 0.5 + 0.5
+    const time =
+      Math.sin((scene.clock.getElapsedTime() % Math.PI) * 2 * 1) * 0.5 + 0.5
     meshRef.current.material.uniforms.progress.value = 0
     meshRef.current.material.uniformsNeedUpdate = true
   })
@@ -202,12 +230,11 @@ export function Brush({
         return range(vertexCount).flatMap(vertexI => [
           // sample from middle of pixels
           vertexI / vertexCount,
-          // progress[curveI * vertexCount + vertexI],
           curveI / curvesCount
         ])
       })
     )
-  }, [])
+  }, [resolution])
 
   return (
     <instancedMesh

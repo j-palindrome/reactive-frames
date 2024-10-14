@@ -64,29 +64,28 @@ export default function Asemic() {
         <Brush
           keyframes={[
             {
-              curves: range(1).map(() =>
+              curves: range(10).map(() =>
                 range(5).map(x => ({
                   // position: new Vector2(...points0[x]),
                   position: new Vector2().random(),
                   thickness: 1,
                   color: new THREE.Color('white'),
-                  alpha: 0.1
+                  alpha: 0.1 / 10
                 }))
               )
             },
             {
-              curves: range(1).map(() =>
+              curves: range(10).map(() =>
                 range(5).map(x => ({
                   position: new Vector2().random(),
                   thickness: 1,
                   color: new THREE.Color('white'),
-                  alpha: 0.25 / 10
+                  alpha: 0.1 / 10
                 }))
               )
             }
           ]}
           size={10}
-          spacing={10}
         />
       </Canvas>
     </>
@@ -131,11 +130,10 @@ export function Brush({
   const controlPointsCount = keyframes[0].curves[0].length
   const aspectRatio = window.innerWidth / window.innerHeight
   const subdivisions = (controlPointsCount - degree) / (degree - 1)
-  const sampleEachCurve = 10
+  const sampleEachCurve = 100
   const curveProgressSamples = subdivisions * sampleEachCurve + 1
 
   let maxLength = 0
-  maxLength = 1
   const progress = keyframes.flatMap(x =>
     x.curves.flatMap(curve => {
       /**
@@ -215,6 +213,8 @@ export function Brush({
         const segmentLength = totalLength / (numPoints - 1)
         const tValues: number[] = []
 
+        console.log('nummPOints:', numPoints)
+
         for (let i = 0; i < numPoints; i++) {
           const targetLength = i * segmentLength
           const t = findParameterForLength(curve, targetLength, 0, 1)
@@ -238,15 +238,26 @@ export function Brush({
       }
 
       const segments: [Vector2, Vector2, Vector2][] = range(subdivisions).map(
-        i => [curve[i].position, curve[i + 1].position, curve[i + 2].position]
+        i => [
+          curve[i].position.clone().lerp(curve[i + 1].position, 0.5),
+          curve[i + 1].position,
+          curve[i + 1].position.clone().lerp(curve[i + 2].position, 0.5)
+        ]
       )
-      return getEquidistantTValues(t => {
+
+      const curveEquation = t => {
         const curvesIndex = Math.min(
           segments.length - 1,
           Math.floor(t * segments.length)
         )
-        return quadraticBezier((t * segments.length) % 1, segments[curvesIndex])
-      }, curveProgressSamples)
+        return quadraticBezier(
+          t * segments.length - curvesIndex,
+          segments[curvesIndex]
+        )
+      }
+      const totalLength = calculateCurveLength(curveEquation, 0, 1)
+      if (totalLength > maxLength) maxLength = totalLength
+      return getEquidistantTValues(curveEquation, curveProgressSamples)
     })
   )
 

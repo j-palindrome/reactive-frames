@@ -8,27 +8,8 @@ import { hash } from '../util/src/shaders/utilities'
 
 const tempObject = new THREE.Object3D()
 
-export default function Asemic() {
+export default function Asemic({ children }) {
   const points = useRef<[number, number][]>([])
-  // const points0 = [
-  //   [1, 0],
-  //   [0, 0.25],
-  //   [1, 0.5],
-  //   [0, 0.75],
-  //   [1, 1]
-  // ]
-  const points0 = [
-    [1, 0],
-    [0, 0.5],
-    [1, 1]
-  ]
-  // const points0 = [
-  //   [0.98, 0.45],
-  //   [0.48, 0.04],
-  //   [0.18, 0.65],
-  //   [0.13, 0.54],
-  //   [0.11, 0.61]
-  // ]
   return (
     <>
       <Canvas
@@ -57,36 +38,9 @@ export default function Asemic() {
             .map(x => `[${x[0].toFixed(2)}, ${x[1].toFixed(2)}]`)
             .join(', ')
           window.navigator.clipboard.writeText(text)
-          console.log(point)
         }}>
         <color attach='background' args={['#000000']} />
-
-        <Brush
-          keyframes={[
-            {
-              curves: range(1).map(() =>
-                range(points0.length).map(i => ({
-                  position: new Vector2(...points0[i]),
-                  // position: new Vector2().random(),
-                  thickness: Math.random(),
-                  color: new THREE.Color('white'),
-                  alpha: 0.1
-                }))
-              )
-            }
-            // {
-            //   curves: range(1000).map(() =>
-            //     range(5).map(x => ({
-            //       position: new Vector2().random(),
-            //       thickness: Math.random(),
-            //       color: new THREE.Color('white'),
-            //       alpha: 0.1
-            //     }))
-            //   )
-            // }
-          ]}
-          size={1}
-        />
+        {children}
       </Canvas>
     </>
   )
@@ -163,6 +117,7 @@ export function Brush({
         // we're getting the total length...
         // t is processed BETWEEN 1/3, 2/3, and 3/3 for 3 segments.
         return (
+          // @ts-expect-error
           curvePath.curves[thisSegment.index].getUtoTmapping(
             // scale [0-1] over whole curve
             (progressI - thisSegment.start) /
@@ -175,7 +130,6 @@ export function Brush({
       })
     })
   )
-  console.log(progress)
 
   const vertexCount =
     (maxLength * window.innerWidth * devicePixelRatio) / (spacing + 1)
@@ -252,8 +206,6 @@ export function Brush({
     )
   }, [resolution])
 
-  console.log(curveProgressSamples)
-
   return (
     <instancedMesh
       ref={meshRef}
@@ -306,7 +258,6 @@ export function Brush({
             vUv = uv;
             // t to U mapping...
             float keyframeProgress = (progress * (1. - 1. / keyframeCount) + 0.5 / keyframeCount);
-            // float keyframeProgress = 0.;
             float curveProgress = pointInfo.y;
             float pointProgress = texture(
               progressTex, 
@@ -315,9 +266,6 @@ export function Brush({
                 + 0.5 / progressCount, 
               curveProgress, 
               keyframeProgress)).x;
-            // float pointProgress = pointInfo.x;
-            //   * (1. - (1. / progressCount)) 
-            //   + 0.5 / progressCount;
 
             vec2[${controlPointsCount}] points = vec2[${controlPointsCount}](
               ${range(controlPointsCount)

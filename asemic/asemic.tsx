@@ -17,11 +17,11 @@ export default function Asemic() {
   //   [0, 0.75],
   //   [1, 1]
   // ]
-  // const points0 = [
-  //   [1, 0],
-  //   [0, 0.5],
-  //   [1, 1]
-  // ]
+  const points0 = [
+    [1, 0],
+    [0, 0.5],
+    [1, 1]
+  ]
   // const points0 = [
   //   [0.98, 0.45],
   //   [0.48, 0.04],
@@ -64,28 +64,28 @@ export default function Asemic() {
         <Brush
           keyframes={[
             {
-              curves: range(10).map(() =>
-                range(5).map(x => ({
-                  // position: new Vector2(...points0[x]),
-                  position: new Vector2().random(),
-                  thickness: 1,
+              curves: range(1).map(() =>
+                range(points0.length).map(i => ({
+                  position: new Vector2(...points0[i]),
+                  // position: new Vector2().random(),
+                  thickness: Math.random(),
                   color: new THREE.Color('white'),
-                  alpha: 0.1 / 10
-                }))
-              )
-            },
-            {
-              curves: range(10).map(() =>
-                range(5).map(x => ({
-                  position: new Vector2().random(),
-                  thickness: 1,
-                  color: new THREE.Color('white'),
-                  alpha: 0.1 / 10
+                  alpha: 0.1
                 }))
               )
             }
+            // {
+            //   curves: range(1000).map(() =>
+            //     range(5).map(x => ({
+            //       position: new Vector2().random(),
+            //       thickness: Math.random(),
+            //       color: new THREE.Color('white'),
+            //       alpha: 0.1
+            //     }))
+            //   )
+            // }
           ]}
-          size={10}
+          size={1}
         />
       </Canvas>
     </>
@@ -136,130 +136,46 @@ export function Brush({
   let maxLength = 0
   const progress = keyframes.flatMap(x =>
     x.curves.flatMap(curve => {
-      /**
-       * Function to calculate the length of a curve segment using numerical integration.
-       * @param curve - The curve function that takes a parameter t and returns a point [x, y].
-       * @param t0 - The start parameter value.
-       * @param t1 - The end parameter value.
-       * @param numSegments - The number of segments for numerical integration.
-       * @returns The length of the curve segment.
-       */
-      function calculateCurveLength(
-        curve: (t: number) => [number, number],
-        t0: number,
-        t1: number,
-        numSegments: number = 1000
-      ): number {
-        let length = 0
-        let prevPoint = curve(t0)
-
-        for (let i = 1; i <= numSegments; i++) {
-          const t = t0 + (t1 - t0) * (i / numSegments)
-          const point = curve(t)
-          const dx = point[0] - prevPoint[0]
-          const dy = point[1] - prevPoint[1]
-          length += Math.sqrt(dx ** 2 + dy ** 2)
-          prevPoint = point
-        }
-
-        return length
-      }
-
-      /**
-       * Function to find the parameter value corresponding to a given length using binary search.
-       * @param curve - The curve function that takes a parameter t and returns a point [x, y].
-       * @param targetLength - The target length along the curve.
-       * @param t0 - The start parameter value.
-       * @param t1 - The end parameter value.
-       * @param tolerance - The tolerance for the binary search.
-       * @returns The parameter value corresponding to the target length.
-       */
-      function findParameterForLength(
-        curve: (t: number) => [number, number],
-        targetLength: number,
-        t0: number,
-        t1: number,
-        tolerance: number = 1e-6
-      ): number {
-        let low = t0
-        let high = t1
-
-        while (high - low > tolerance) {
-          const mid = (low + high) / 2
-          const length = calculateCurveLength(curve, t0, mid)
-
-          if (length < targetLength) {
-            low = mid
-          } else {
-            high = mid
-          }
-        }
-
-        return (low + high) / 2
-      }
-
-      /**
-       * Function to sample equidistant points on a curve.
-       * @param curve - The curve function that takes a parameter t and returns a point [x, y].
-       * @param numPoints - The number of equidistant points to sample.
-       * @returns An array of equidistant points on the curve.
-       */
-      function getEquidistantTValues(
-        curve: (t: number) => [number, number],
-        numPoints: number
-      ) {
-        const totalLength = calculateCurveLength(curve, 0, 1)
-
-        const segmentLength = totalLength / (numPoints - 1)
-        const tValues: number[] = []
-
-        console.log('nummPOints:', numPoints)
-
-        for (let i = 0; i < numPoints; i++) {
-          const targetLength = i * segmentLength
-          const t = findParameterForLength(curve, targetLength, 0, 1)
-          tValues.push(t)
-        }
-
-        return tValues
-      }
-
-      // Example usage
-      const quadraticBezier = (
-        t: number,
-        [p0, p1, p2]: [Vector2, Vector2, Vector2]
-      ): [number, number] => {
-        // Example curve: quadratic Bezier curve
-        const x =
-          (1 - t) * (1 - t) * p0.x + 2 * (1 - t) * t * p1.x + t * t * p2.x
-        const y =
-          (1 - t) * (1 - t) * p0.y + 2 * (1 - t) * t * p1.y + t * t * p2.y
-        return [x, y]
-      }
-
-      const segments: [Vector2, Vector2, Vector2][] = range(subdivisions).map(
-        i => [
+      const curvePath = new THREE.CurvePath()
+      const segments: THREE.Curve<Vector2>[] = []
+      range(subdivisions).forEach(i => {
+        const thisCurve = new THREE.QuadraticBezierCurve(
           curve[i].position.clone().lerp(curve[i + 1].position, 0.5),
           curve[i + 1].position,
           curve[i + 1].position.clone().lerp(curve[i + 2].position, 0.5)
-        ]
-      )
+        )
+        curvePath.add(thisCurve)
+        segments.push(thisCurve)
+      })
+      const length = curvePath.getLength()
+      if (length > maxLength) maxLength = length
+      const curveProgress = curvePath.getCurveLengths().map((x, i) => ({
+        end: x / length,
+        start: (x - curvePath.curves[i].getLength()) / length,
+        index: i
+      }))
 
-      const curveEquation = t => {
-        const curvesIndex = Math.min(
-          segments.length - 1,
-          Math.floor(t * segments.length)
+      return range(curveProgressSamples).map(progressI => {
+        progressI /= curveProgressSamples - 1
+        const thisSegment = curveProgress.find(
+          x => x.end >= progressI && x.start <= progressI
+        )!
+        // we're getting the total length...
+        // t is processed BETWEEN 1/3, 2/3, and 3/3 for 3 segments.
+        return (
+          curvePath.curves[thisSegment.index].getUtoTmapping(
+            // scale [0-1] over whole curve
+            (progressI - thisSegment.start) /
+              (thisSegment.end - thisSegment.start)
+          ) /
+            // place within the properly divided segment
+            curveProgress.length +
+          thisSegment.index / curveProgress.length
         )
-        return quadraticBezier(
-          t * segments.length - curvesIndex,
-          segments[curvesIndex]
-        )
-      }
-      const totalLength = calculateCurveLength(curveEquation, 0, 1)
-      if (totalLength > maxLength) maxLength = totalLength
-      return getEquidistantTValues(curveEquation, curveProgressSamples)
+      })
     })
   )
+  console.log(progress)
 
   const vertexCount =
     (maxLength * window.innerWidth * devicePixelRatio) / (spacing + 1)

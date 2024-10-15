@@ -1,5 +1,5 @@
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { last, max, maxBy, range, sum, sumBy } from 'lodash'
+import { cloneDeep, last, max, maxBy, range, sum, sumBy } from 'lodash'
 import React, { useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { Vector2 } from 'three'
@@ -56,25 +56,17 @@ export function Brush({
     x.curves.flatMap(curve => {
       // interpolate the bezier curves which are too short
       if (curve.length < controlPointsCount) {
-        console.log('calcing', curve)
-
         let i = 0
         while (curve.length < controlPointsCount) {
-          console.log('l', curve.length, i)
-
           curve.splice(i + 1, 0, {
-            position: curve[i].position
-              .clone()
-              .lerp(curve[i + 1].position, 0.5),
-            thickness: lerp(
-              curve[i].thickness ?? 1,
-              curve[i + 1].thickness ?? 1,
-              0.5
-            )
+            position: curve[i].position.clone().lerp(curve[i + 1].position, 0.5)
+            // thickness: curve[i].thickness
           })
-          i = (i + 2) % (curve.length - 2)
+          i += 2
+          if (i > curve.length - 1) i -= curve.length - 1
         }
       }
+
       const curvePath = new THREE.CurvePath()
       const segments: THREE.Curve<Vector2>[] = []
       range(subdivisions).forEach(i => {
@@ -84,7 +76,7 @@ export function Brush({
             : curve[i].position.clone().lerp(curve[i + 1].position, 0.5),
           curve[i + 1].position,
           i === subdivisions - 1
-            ? curve[i + 1].position
+            ? curve[i + 2].position
             : curve[i + 1].position.clone().lerp(curve[i + 2].position, 0.5)
         )
         curvePath.add(thisCurve)
@@ -137,6 +129,12 @@ export function Brush({
             })
           })
         })
+      )
+
+      console.log(
+        'making',
+        array,
+        controlPointsCount * curvesCount * keyframeCount * 4
       )
 
       const tex = new THREE.Data3DTexture(
@@ -264,8 +262,9 @@ export function Brush({
                 )
                 .join(', ')}
             );
-            vec2 thisPosition = 
-              multiBezier2(pointProgress, points);
+            // vec2 thisPosition = 
+            //   multiBezier2(pointProgress, points);
+            vec2 thisPosition = texture(pointsTex, vec3(pointProgress, curveProgress, keyframeProgress)).xy;
             float thisThickness = texture(pointsTex, vec3(pointProgress, curveProgress, keyframeProgress)).z;
             vColor = texture(colorTex, vec3(pointProgress, curveProgress, keyframeProgress));
             v_test = pointProgress;

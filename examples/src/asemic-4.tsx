@@ -1,6 +1,7 @@
 import { range } from 'lodash'
-import Asemic, { Brush } from '../../asemic/asemic'
+import Asemic from '../../asemic/asemic'
 import { Vector2, Color } from 'three'
+import { Brush } from '../../asemic/Brush'
 
 export default function Asemic4() {
   return (
@@ -8,30 +9,27 @@ export default function Asemic4() {
       <Brush
         keyframes={[
           {
-            curves: range(2000).map(() =>
-              range(5).map(i => ({
+            curves: range(100).map(() =>
+              range(Math.ceil(Math.random() * 4) + 1).map(i => ({
                 position: new Vector2().random(),
                 // position: new Vector2().random(),
-                thickness: Math.random(),
-                color: new Color('white'),
-                alpha: 0.1
+                thickness: Math.random() * 2 + 1,
+                alpha: 0.05 / 2
               }))
             )
           },
           {
-            curves: range(2000).map(() =>
-              range(5).map(i => ({
+            curves: range(100).map(() =>
+              range(Math.ceil(Math.random() * 4) + 1).map(i => ({
                 position: new Vector2().random(),
                 // position: new Vector2().random(),
-                thickness: Math.random(),
-                color: new Color('white'),
-                alpha: 0.1
+                thickness: Math.random() * 2 + 1,
+                alpha: 0.05 / 2
               }))
             )
           }
         ]}
-        size={1}
-        spacing={2}
+        size={5}
       />
     </Asemic>
   )

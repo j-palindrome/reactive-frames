@@ -4,17 +4,17 @@ import useText from '../../asemic/StrokeTExt'
 import { Brush } from '../../asemic/Brush'
 
 export default function AsemicText() {
-  const text = useText('testing this')
+  const text = useText('this')
   return (
     <Asemic>
       <Brush
-        position={new Vector2(0.5, 0.5)}
-        rotation={0.5 * Math.PI * 2}
-        scale={new Vector2(0.5, 0.5)}
-        keyframes={[{ curves: text }]}
-        spacing={5}
-        jitter={{ size: 0, position: new Vector2(0, 30) }}
-        size={1}
+        keyframes={[{ curves: text, rotation: 0 }]}
+        spacing={10}
+        jitter={{
+          // rotation: 0.5 * Math.PI * 2,
+          position: new Vector2(15, 0)
+        }}
+        size={new Vector2(10, 1)}
       />
     </Asemic>
   )

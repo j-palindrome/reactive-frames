@@ -14,26 +14,45 @@ export type Point = {
   color?: THREE.Color
 }
 
+const degree = 2
 const targetVector = new THREE.Vector2()
+export type Keyframes = {
+  curves: Point[][]
+  position?: Vector2
+  scale?: Vector2
+  rotation?: number
+}[]
+export type BrushSettings = {
+  spacing?: number
+  size?: number
+  jitter?: {
+    size?: number
+    position?: Vector2
+    hsl?: THREE.Vector3
+    a?: number
+  }
+  position?: Vector2
+  scale?: Vector2
+  rotation?: number
+}
+const sampleMatrix = new THREE.Matrix4()
 export function Brush({
   keyframes,
   spacing = 0,
   size = 1,
+  jitter,
+  position = new Vector2(),
+  scale = new Vector2(),
+  rotation = 0
+}: BrushSettings & { keyframes: Keyframes }) {
   jitter = {
     size: 0,
-    position: 0
-  },
-  degree = 2
-}: {
-  keyframes: { curves: Point[][] }[]
-  spacing?: number
-  size: number
-  jitter?: {
-    size?: number
-    position?: number
+    position: new Vector2(),
+    hsl: new THREE.Vector3(),
+    a: 0,
+    ...jitter
   }
-  degree?: 2 | 3
-}) {
+
   const resolution = useThree(scene =>
     scene.gl.getDrawingBufferSize(targetVector)
   )
@@ -42,14 +61,14 @@ export function Brush({
     THREE.InstancedMesh<THREE.PlaneGeometry, THREE.ShaderMaterial>
   >(null!)
   const keyframeCount = keyframes.length
-  const curvesCount = keyframes[0].curves.length
+  const curveCount = keyframes[0].curves.length
   const controlPointsCount = max(
     keyframes.flatMap(x => x.curves).map(x => x.length)
   )!
   const aspectRatio = window.innerWidth / window.innerHeight
   const subdivisions = (controlPointsCount - degree) / (degree - 1)
   const sampleEachCurve = 100
-  const curveProgressSamples = subdivisions * sampleEachCurve + 1
+  const controlPointCount = subdivisions * sampleEachCurve + 1
 
   let maxLength = 0
   const progress = keyframes.flatMap(x =>
@@ -59,11 +78,18 @@ export function Brush({
         let i = 0
         while (curve.length < controlPointsCount) {
           curve.splice(i + 1, 0, {
-            position: curve[i].position.clone().lerp(curve[i + 1].position, 0.5)
-            // thickness: curve[i].thickness
+            position: curve[i].position
+              .clone()
+              .lerp(curve[i + 1].position, 0.5),
+            thickness: lerp(
+              curve[i].thickness ?? 1,
+              curve[i + 1].thickness ?? 1,
+              0.5
+            ),
+            alpha: lerp(curve[i].alpha ?? 1, curve[i + 1].alpha ?? 1, 0.5)
           })
           i += 2
-          if (i > curve.length - 1) i -= curve.length - 1
+          if (i >= curve.length - 2) i -= curve.length - 2
         }
       }
 
@@ -90,8 +116,8 @@ export function Brush({
         index: i
       }))
 
-      return range(curveProgressSamples).map(progressI => {
-        progressI /= curveProgressSamples - 1
+      return range(controlPointCount).map(progressI => {
+        progressI /= controlPointCount - 1
         const thisSegment = curveProgress.find(
           x => x.end >= progressI && x.start <= progressI
         )!
@@ -131,16 +157,10 @@ export function Brush({
         })
       )
 
-      console.log(
-        'making',
-        array,
-        controlPointsCount * curvesCount * keyframeCount * 4
-      )
-
       const tex = new THREE.Data3DTexture(
         array,
         controlPointsCount,
-        curvesCount,
+        curveCount,
         keyframeCount
       )
       tex.format = format
@@ -152,8 +172,8 @@ export function Brush({
 
     const progressTex = new THREE.Data3DTexture(
       Float32Array.from(progress),
-      curveProgressSamples,
-      curvesCount,
+      controlPointCount,
+      curveCount,
       keyframeCount
     )
     progressTex.format = THREE.RedFormat
@@ -177,16 +197,47 @@ export function Brush({
       Math.sin((scene.clock.getElapsedTime() % Math.PI) * 2 * 1) * 0.5 + 0.5
     meshRef.current.material.uniforms.progress.value = time
     meshRef.current.material.uniformsNeedUpdate = true
+
+    const thisKey = Math.floor(time * keyframes.length)
+    const lerpAmount = time * keyframes.length - thisKey
+    const thisKeyframe = keyframes[thisKey]
+    meshRef.current.position.set(
+      ...(thisKeyframe.position ?? position)
+        .clone()
+        .lerp(keyframes[thisKey + 1].position ?? position, lerpAmount)
+        .toArray(),
+      0
+    )
+    meshRef.current.rotation.set(
+      0,
+      0,
+      lerp(
+        keyframes[thisKey].rotation ?? rotation,
+        keyframes[thisKey + 1].rotation ?? rotation,
+        lerpAmount
+      )
+    )
+    meshRef.current.scale.set(
+      ...(thisKeyframe.scale ?? scale)
+        .clone()
+        .lerp(keyframes[thisKey + 1].scale ?? scale, lerpAmount)
+        .toArray(),
+      1
+    )
   })
 
   const pointProgress = useMemo(() => {
     return Float32Array.from(
-      range(curvesCount).flatMap(curveI => {
-        return range(vertexCount).flatMap(vertexI => [
+      range(curveCount).flatMap(curveI => {
+        return range(vertexCount).flatMap(vertexI => {
+          const pointProg = vertexI / (vertexCount - 1)
+          const curveProg = curveI / (curveCount - 1)
           // sample from middle of pixels
-          vertexI / vertexCount,
-          curveI / curvesCount
-        ])
+          return [
+            pointProg * (1 - 1 / controlPointCount) + 0.5 / controlPointCount,
+            curveProg * (1 - 1 / curveCount) + 0.5 / curveCount
+          ]
+        })
       })
     )
   }, [resolution])
@@ -194,11 +245,11 @@ export function Brush({
   return (
     <instancedMesh
       ref={meshRef}
-      args={[undefined, undefined, vertexCount * curvesCount]}
-      position={[0, 0, 0]}>
-      <planeGeometry
-        // @ts-expect-error
-        args={[1, 1 * aspectRatio].map(x => (x / window.innerWidth) * size)}>
+      args={[undefined, undefined, vertexCount * curveCount]}
+      position={new THREE.Vector3(...position)}
+      scale={new THREE.Vector3(...scale)}
+      rotation={new THREE.Euler(rotation)}>
+      <planeGeometry args={[1, 1 * aspectRatio]}>
         <instancedBufferAttribute
           attach='attributes-pointInfo'
           args={[pointProgress, 2]}
@@ -210,15 +261,21 @@ export function Brush({
           progress: { value: 0 },
           progressTex: { value: progressTex },
           keyframeCount: { value: keyframeCount },
-          progressCount: { value: curveProgressSamples },
           pointsTex: { value: pointsTex },
           colorTex: { value: colorTex },
-          jitterSize: { value: jitter.size },
-          jitterPosition: { value: jitter.position },
-          hashSeed: { value: Math.random() }
+          jitter: { value: jitter },
+          resolution: { value: resolution },
+          size: { value: size }
         }}
         vertexShader={
           /*glsl*/ `
+          struct Jitter {
+            float size;
+            vec2 position;
+            vec3 hsl;
+            float a;
+          };
+
           in vec2 pointInfo;
 
           uniform sampler3D pointsTex;
@@ -226,10 +283,10 @@ export function Brush({
           uniform sampler3D progressTex;
           uniform float progress;
           uniform float keyframeCount;
-          uniform float progressCount;
-          uniform float jitterSize;
-          uniform float jitterPosition;
-          uniform float hashSeed;
+          uniform float curveCount;
+          uniform vec2 resolution;
+          uniform float size;
+          uniform Jitter jitter;
 
           out vec2 vUv;
           out vec4 vColor;
@@ -240,17 +297,17 @@ export function Brush({
           ${hash}
 
           void main() {
+            float brushSize = 1. / resolution.x * size;
             vUv = uv;
             // u to T mapping...
             float keyframeProgress = (progress * (1. - 1. / keyframeCount) + 0.5 / keyframeCount);
             float curveProgress = pointInfo.y;
             float pointProgress = texture(
               progressTex, 
-              vec3(pointInfo.x
-                * (1. - (1. / progressCount)) 
-                + 0.5 / progressCount, 
-              curveProgress, 
-              keyframeProgress)).x;
+              vec3(
+                pointInfo.x, 
+                curveProgress, 
+                keyframeProgress)).x;
 
             vec2[${controlPointsCount}] points = vec2[${controlPointsCount}](
               ${range(controlPointsCount)
@@ -262,19 +319,43 @@ export function Brush({
                 )
                 .join(', ')}
             );
-            // vec2 thisPosition = 
-            //   multiBezier2(pointProgress, points);
-            vec2 thisPosition = texture(pointsTex, vec3(pointProgress, curveProgress, keyframeProgress)).xy;
-            float thisThickness = texture(pointsTex, vec3(pointProgress, curveProgress, keyframeProgress)).z;
-            vColor = texture(colorTex, vec3(pointProgress, curveProgress, keyframeProgress));
-            v_test = pointProgress;
-
+            vec2 thisPosition = 
+              multiBezier2(pointProgress, points);
+            // vec2 thisPosition = texture(pointsTex, vec3(pointProgress, curveProgress, keyframeProgress)).xy;
+            float thisThickness = texture(
+              pointsTex, 
+              vec3(
+                pointProgress, 
+                curveProgress, 
+                keyframeProgress)).z;
+            vColor = texture(
+              colorTex, 
+              vec3(
+                pointProgress, 
+                curveProgress, 
+                keyframeProgress));
+            
+            vec2 jitterPosition = 
+              (vec2(hash(thisPosition.x, .184 + progress), hash(thisPosition.y, .182 + progress)) - 0.5) 
+              * jitter.position;
+            float jitterSize = 
+              hash(thisPosition.x + thisPosition.y, 
+                .923 + progress)
+              * jitter.size;
+            float jitterA = vColor.a 
+              * (1. - (
+                hash(thisPosition.x + thisPosition.y, 
+                  .294 + progress) 
+                * jitter.a));
             
             gl_Position = 
-            projectionMatrix 
-            // * modelViewMatrix 
-            // * instanceMatrix
-            * (vec4(thisPosition + position.xy * 1., 0, 1));
+              projectionMatrix 
+              * modelViewMatrix 
+              // * instanceMatrix
+              * vec4(
+                thisPosition 
+                + jitterPosition * brushSize
+                + position.xy * thisThickness * brushSize * (jitterSize + 1.), 0, 1);
           }`
         }
         fragmentShader={

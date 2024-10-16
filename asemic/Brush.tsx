@@ -70,79 +70,104 @@ export function Brush({
   const controlPointsCount = max(
     keyframes.flatMap(x => x.curves).map(x => x.length)
   )!
+
   const aspectRatio = window.innerWidth / window.innerHeight
   const subdivisions = (controlPointsCount - degree) / (degree - 1)
   const sampleEachCurve = 100
-  const controlPointCount = subdivisions * sampleEachCurve + 1
+  const curvePoints = subdivisions * sampleEachCurve + 1
 
-  let maxLength = 0
-  const progress = keyframes.flatMap(x =>
-    x.curves.flatMap(curve => {
-      // interpolate the bezier curves which are too short
-      if (curve.length < controlPointsCount) {
-        let i = 0
-        while (curve.length < controlPointsCount) {
-          curve.splice(i + 1, 0, {
-            position: curve[i].position
-              .clone()
-              .lerp(curve[i + 1].position, 0.5),
-            thickness: lerp(
-              curve[i].thickness ?? 1,
-              curve[i + 1].thickness ?? 1,
-              0.5
-            ),
-            alpha: lerp(curve[i].alpha ?? 1, curve[i + 1].alpha ?? 1, 0.5)
-          })
-          i += 2
-          if (i >= curve.length - 2) i -= curve.length - 2
+  const { progress, vertexCountPerCurve } = useMemo(() => {
+    const maxLengthsPerCurve = range(keyframes[0].curves.length).flatMap(
+      () => 0
+    )
+
+    const keyframeCurves = keyframes.map(keyframe => {
+      let keyframeLength = 0
+      return keyframe.curves.map((curve, i) => {
+        // interpolate the bezier curves which are too short
+        if (curve.length < controlPointsCount) {
+          let i = 0
+          while (curve.length < controlPointsCount) {
+            curve.splice(i + 1, 0, {
+              position: curve[i].position
+                .clone()
+                .lerp(curve[i + 1].position, 0.5),
+              thickness: lerp(
+                curve[i].thickness ?? 1,
+                curve[i + 1].thickness ?? 1,
+                0.5
+              ),
+              alpha: lerp(curve[i].alpha ?? 1, curve[i + 1].alpha ?? 1, 0.5)
+            })
+            i += 2
+            if (i >= curve.length - 2) i -= curve.length - 2
+          }
         }
-      }
 
-      const curvePath = new THREE.CurvePath()
-      const segments: THREE.Curve<Vector2>[] = []
-      range(subdivisions).forEach(i => {
-        const thisCurve = new THREE.QuadraticBezierCurve(
-          i === 0
-            ? curve[i].position
-            : curve[i].position.clone().lerp(curve[i + 1].position, 0.5),
-          curve[i + 1].position,
-          i === subdivisions - 1
-            ? curve[i + 2].position
-            : curve[i + 1].position.clone().lerp(curve[i + 2].position, 0.5)
-        )
-        curvePath.add(thisCurve)
-        segments.push(thisCurve)
-      })
-      const length = curvePath.getLength()
-      if (length > maxLength) maxLength = length
-      const curveProgress = curvePath.getCurveLengths().map((x, i) => ({
-        end: x / length,
-        start: (x - curvePath.curves[i].getLength()) / length,
-        index: i
-      }))
+        const curvePath = new THREE.CurvePath()
+        const segments: THREE.Curve<Vector2>[] = []
+        range(subdivisions).forEach(i => {
+          const thisCurve = new THREE.QuadraticBezierCurve(
+            i === 0
+              ? curve[i].position
+              : curve[i].position.clone().lerp(curve[i + 1].position, 0.5),
+            curve[i + 1].position,
+            i === subdivisions - 1
+              ? curve[i + 2].position
+              : curve[i + 1].position.clone().lerp(curve[i + 2].position, 0.5)
+          )
+          curvePath.add(thisCurve)
+          segments.push(thisCurve)
+        })
+        const length = curvePath.getLength()
 
-      return range(controlPointCount).map(progressI => {
-        progressI /= controlPointCount - 1
-        const thisSegment = curveProgress.find(
-          x => x.end >= progressI && x.start <= progressI
-        )!
-        return (
-          // @ts-expect-error
-          curvePath.curves[thisSegment.index].getUtoTmapping(
-            // scale [0-1] over whole curve
-            (progressI - thisSegment.start) /
-              (thisSegment.end - thisSegment.start)
-          ) /
-            // place within the properly divided segment
-            curveProgress.length +
-          thisSegment.index / curveProgress.length
-        )
+        // We sample each curve according to its maximum keyframe length
+        if (length > maxLengthsPerCurve[i]) maxLengthsPerCurve[i] = length
+        const start = keyframeLength
+        keyframeLength += length
+        return {
+          curvePath,
+          start,
+          end: keyframeLength
+        }
       })
     })
-  )
 
-  const vertexCount =
-    (maxLength * window.innerWidth * devicePixelRatio) / (size.y / 2 + spacing)
+    const progress = keyframeCurves.flatMap(keyframe =>
+      keyframe.flatMap(({ curvePath, start, end }) => {
+        const length = end - start
+        const curveProgress = curvePath.getCurveLengths().map((x, i) => ({
+          end: x / length,
+          start: (x - curvePath.curves[i].getLength()) / length,
+          index: i
+        }))
+
+        return range(curvePoints).map(progressI => {
+          progressI /= curvePoints - 1
+          const thisSegment =
+            curveProgress.find(
+              x => x.end >= progressI && x.start <= progressI
+            ) ?? last(curveProgress)!
+          return (
+            // @ts-expect-error
+            curvePath.curves[thisSegment.index].getUtoTmapping(
+              // scale [0-1] over whole curve
+              (progressI - thisSegment.start) /
+                (thisSegment.end - thisSegment.start)
+            ) /
+              // place within the properly divided segment
+              curveProgress.length +
+            thisSegment.index / curveProgress.length
+          )
+        })
+      })
+    )
+
+    const vertexCountPerCurve = maxLengthsPerCurve.map(
+      x => (x * window.innerWidth * devicePixelRatio) / (size.y / 2 + spacing)
+    )
+    return { progress, vertexCountPerCurve }
+  }, [])
 
   // write keyframes to 3D data texture.
   // read them into the shaders.
@@ -177,7 +202,7 @@ export function Brush({
 
     const progressTex = new THREE.Data3DTexture(
       Float32Array.from(progress),
-      controlPointCount,
+      curvePoints,
       curveCount,
       keyframeCount
     )
@@ -226,12 +251,13 @@ export function Brush({
   const pointProgress = useMemo(() => {
     return Float32Array.from(
       range(curveCount).flatMap(curveI => {
-        return range(vertexCount).flatMap(vertexI => {
-          const pointProg = vertexI / (vertexCount - 1)
+        const verticesInCurve = vertexCountPerCurve[curveI]
+        return range(verticesInCurve).flatMap(vertexI => {
+          const pointProg = vertexI / (verticesInCurve - 1)
           const curveProg = curveI / (curveCount - 1)
           // sample from middle of pixels
           return [
-            pointProg * (1 - 1 / controlPointCount) + 0.5 / controlPointCount,
+            pointProg * (1 - 1 / curvePoints) + 0.5 / curvePoints,
             curveProg * (1 - 1 / curveCount) + 0.5 / curveCount
           ]
         })
@@ -242,7 +268,7 @@ export function Brush({
   return (
     <instancedMesh
       ref={meshRef}
-      args={[undefined, undefined, vertexCount * curveCount]}>
+      args={[undefined, undefined, sum(vertexCountPerCurve)]}>
       <planeGeometry args={[1 * size.x, 1 * aspectRatio * size.y]}>
         <instancedBufferAttribute
           attach='attributes-pointInfo'

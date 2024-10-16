@@ -10,10 +10,10 @@ export default function AsemicText() {
       <Brush
         keyframes={[{ curves: text, rotation: 0 }]}
         spacing={10}
-        jitter={{
-          // rotation: 0.5 * Math.PI * 2,
-          position: new Vector2(15, 0)
-        }}
+        // jitter={{
+        //   // rotation: 0.5 * Math.PI * 2,
+        //   position: new Vector2(15, 0)
+        // }}
         size={new Vector2(10, 1)}
       />
     </Asemic>

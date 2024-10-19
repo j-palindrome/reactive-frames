@@ -1,7 +1,7 @@
 import { range } from 'lodash'
-import Asemic from '../../asemic/asemic'
+import Asemic from '../../src/asemic/Asemic'
 import { Vector2, Color } from 'three'
-import { Brush } from '../../asemic/Brush'
+import { Brush } from '../../src/asemic/Brush'
 
 export default function Asemic4() {
   return (

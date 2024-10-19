@@ -1,4 +1,4 @@
-import Asemic, { Brush } from '../../asemic/asemic'
+import Asemic, { Brush } from '../../src/asemic/Asemic'
 
 export default function App() {
   return (

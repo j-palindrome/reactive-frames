@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
-import { Brush } from '../../asemic/asemic'
+import { Brush } from '../../src/asemic/Asemic'
 import * as twgl from 'twgl.js'
-import Asemic from '../../asemic/asemic'
+import Asemic from '../../src/asemic/Asemic'
 
 export default function AsemicTest() {
   const canvasRef = useRef<HTMLCanvasElement>(null!)

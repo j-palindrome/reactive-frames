@@ -1,10 +1,17 @@
+import { FrameComponent } from '@/src'
 import { Canvas } from '@react-three/fiber'
-import { useRef } from 'react'
+import { Children, createContext, useRef } from 'react'
+import { ParentProps } from '../types'
+import { omit } from 'lodash'
 
-export default function Asemic({ children }) {
+export default function Asemic(props: ParentProps<{}, null>) {
   const points = useRef<[number, number][]>([])
   return (
-    <>
+    <FrameComponent
+      options={{ ...omit(props, 'children') }}
+      getSelf={() => {
+        return null
+      }}>
       <Canvas
         className='fixed h-screen w-screen'
         gl={{ antialias: true }}
@@ -35,8 +42,8 @@ export default function Asemic({ children }) {
           window.navigator.clipboard.writeText(text)
         }}>
         <color attach='background' args={['#000000']} />
-        {children}
+        {props.children}
       </Canvas>
-    </>
+    </FrameComponent>
   )
 }

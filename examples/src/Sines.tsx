@@ -11,7 +11,7 @@ import {
   Texture,
   VideoPlane
 } from '../../src/frames/CanvasGL'
-import { generateShape } from '../../asemic/mesh'
+import { generateShape } from '../../src/asemic/mesh'
 import { cubicBezier, rotate2d } from '../../src/utilities/shaders'
 import * as twgl from 'twgl.js'
 

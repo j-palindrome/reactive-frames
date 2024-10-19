@@ -7,14 +7,14 @@ import {
   FrameComponent,
   defineChildComponent
 } from '../blocks/FrameChildComponents'
-import { Layer as LayerInstance } from '../../asemic/mesh'
+import { Layer as LayerInstance } from '../asemic/mesh'
 import {
   cubicBezier,
   cubicBezierNormal,
   defaultVert2DNoResolution
 } from '../utilities/shaders'
 import { CanvasComponentProps, ParentProps, ReactiveContext } from '../types'
-import PingPongBufferInstance from '../../asemic/PingPongBuffer'
+import PingPongBufferInstance from '../frames'
 
 const CanvasGL = (
   props: ParentProps<

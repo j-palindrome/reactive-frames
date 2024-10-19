@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { Brush } from '../../asemic/asemic'
+import { Brush } from '../../src/asemic/Asemic'
 import * as twgl from 'twgl.js'
 
 export default function AsemicTest() {

@@ -1,28 +1,19 @@
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { cloneDeep, last, max, maxBy, range, sum, sumBy } from 'lodash'
-import React, { useMemo, useRef } from 'react'
+import React, { useImperativeHandle, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { Vector2 } from 'three'
-import { multiBezier2 } from '../util/src/shaders/bezier'
-import { hash } from '../util/src/shaders/utilities'
+import { multiBezier2 } from '../../util/src/shaders/bezier'
+import { hash } from '../../util/src/shaders/utilities'
 import { lerp } from 'three/src/math/MathUtils.js'
-import { rotate2d } from '../util/src/shaders/manipulation'
-
-export type Point = {
-  position: Vector2
-  thickness?: number
-  alpha?: number
-  color?: THREE.Color
-}
+import { rotate2d } from '../../util/src/shaders/manipulation'
+import Keyframes from './Keyframes'
+import { ChildProps } from '../types'
+import { ChildComponent } from '../blocks/FrameChildComponents'
 
 const degree = 2
 const targetVector = new THREE.Vector2()
-export type Keyframes = {
-  curves: Point[][]
-  position?: Vector2
-  scale?: Vector2
-  rotation?: number
-}[]
+
 export type BrushSettings = {
   spacing?: number
   size?: Vector2
@@ -37,18 +28,31 @@ export type BrushSettings = {
   position?: Vector2
   scale?: Vector2
   rotation?: number
+  fragmentShader?: string
+  vertexShader?: string
+  between: [number, number]
 }
 
-export function Brush({
-  keyframes,
-  spacing = 0,
-  alpha = 1,
-  size = new Vector2(1, 1),
-  position = new Vector2(),
-  scale = new Vector2(1, 1),
-  rotation = 0,
-  jitter
-}: BrushSettings & { keyframes: Keyframes }) {
+export const Brush = (
+  props: ChildProps<
+    BrushSettings & { keyframes: Keyframes['keyframes'] },
+    null,
+    null
+  >
+) => {
+  let {
+    keyframes,
+    spacing = 0,
+    alpha = 1,
+    size = new Vector2(1, 1),
+    position = new Vector2(),
+    scale = new Vector2(1, 1),
+    rotation = 0,
+    jitter,
+    fragmentShader = /*glsl*/ `return color;`,
+    vertexShader = /*glsl*/ `return position;`,
+    between = [0, 1]
+  } = props
   jitter = {
     size: new Vector2(0, 0),
     position: new Vector2(0, 0),
@@ -71,12 +75,10 @@ export function Brush({
     keyframes.flatMap(x => x.curves).map(x => x.length)
   )!
 
-  const aspectRatio = window.innerWidth / window.innerHeight
   const subdivisions = (controlPointsCount - degree) / (degree - 1)
-  const sampleEachCurve = 100
-  const curvePoints = subdivisions * sampleEachCurve + 1
+  const curvePoints = 100
 
-  const { progress, vertexCountPerCurve } = useMemo(() => {
+  const { progressCurves, vertexCountPerCurve } = useMemo(() => {
     const maxLengthsPerCurve = range(keyframes[0].curves.length).flatMap(
       () => 0
     )
@@ -133,7 +135,7 @@ export function Brush({
       })
     })
 
-    const progress = keyframeCurves.flatMap(keyframe =>
+    const progressCurves = keyframeCurves.flatMap(keyframe =>
       keyframe.flatMap(({ curvePath, start, end }) => {
         const length = end - start
         const curveProgress = curvePath.getCurveLengths().map((x, i) => ({
@@ -166,7 +168,7 @@ export function Brush({
     const vertexCountPerCurve = maxLengthsPerCurve.map(
       x => (x * window.innerWidth * devicePixelRatio) / (size.y / 2 + spacing)
     )
-    return { progress, vertexCountPerCurve }
+    return { progressCurves, vertexCountPerCurve }
   }, [])
 
   // write keyframes to 3D data texture.
@@ -201,7 +203,7 @@ export function Brush({
     }
 
     const progressTex = new THREE.Data3DTexture(
-      Float32Array.from(progress),
+      Float32Array.from(progressCurves),
       curvePoints,
       curveCount,
       keyframeCount
@@ -222,32 +224,7 @@ export function Brush({
     return { pointsTex, colorTex, progressTex }
   }, [keyframes])
 
-  useFrame(scene => {
-    const time =
-      Math.sin((scene.clock.getElapsedTime() % Math.PI) * 2 * 1) * 0.5 + 0.5
-    meshRef.current.material.uniforms.progress.value = time
-    meshRef.current.material.uniformsNeedUpdate = true
-
-    let thisKey = Math.floor(time * (keyframeCount - 1))
-    if (thisKey === keyframeCount - 1 && thisKey > 0) thisKey -= 1
-    const lerpAmount = time * (keyframeCount - 1) - thisKey
-    const thisKeyframe = keyframes[thisKey]
-    const positionVec = (thisKeyframe.position ?? position)
-      .clone()
-      .lerp(keyframes[thisKey + 1]?.position ?? position, lerpAmount)
-    meshRef.current.position.set(positionVec.x, positionVec.y, 0)
-    const rotationRad = lerp(
-      keyframes[thisKey].rotation ?? rotation,
-      keyframes[thisKey + 1]?.rotation ?? rotation,
-      lerpAmount
-    )
-    meshRef.current.rotation.set(0, 0, rotationRad * 2 * Math.PI)
-    const scaleVec = (thisKeyframe.scale ?? scale)
-      .clone()
-      .lerp(keyframes[thisKey + 1]?.scale ?? scale, lerpAmount)
-    meshRef.current.scale.set(scaleVec.x, scaleVec.y, 1)
-  })
-
+  // curves are sampled according to how long they are
   const pointProgress = useMemo(() => {
     return Float32Array.from(
       range(curveCount).flatMap(curveI => {
@@ -265,30 +242,67 @@ export function Brush({
     )
   }, [resolution])
 
+  const draw = (progress: number) => {
+    if (progress < between[0] || progress > between[1]) {
+      meshRef.current.visible = false
+      return
+    } else {
+      meshRef.current.visible = true
+    }
+
+    const mappedTime = (progress - between[0]) / (between[1] - between[0])
+
+    meshRef.current.material.uniforms.progress.value = mappedTime
+    meshRef.current.material.uniformsNeedUpdate = true
+
+    let thisKey = Math.floor(mappedTime * (keyframeCount - 1))
+    if (thisKey === keyframeCount - 1 && thisKey > 0) thisKey -= 1
+    const lerpAmount = mappedTime * (keyframeCount - 1) - thisKey
+    const thisKeyframe = keyframes[thisKey]
+    const positionVec = (thisKeyframe.position ?? position)
+      .clone()
+      .lerp(keyframes[thisKey + 1]?.position ?? position, lerpAmount)
+    meshRef.current.position.set(positionVec.x, positionVec.y, 0)
+    const rotationRad = lerp(
+      keyframes[thisKey].rotation ?? rotation,
+      keyframes[thisKey + 1]?.rotation ?? rotation,
+      lerpAmount
+    )
+    meshRef.current.rotation.set(0, 0, rotationRad * 2 * Math.PI)
+    const scaleVec = (thisKeyframe.scale ?? scale)
+      .clone()
+      .lerp(keyframes[thisKey + 1]?.scale ?? scale, lerpAmount)
+    meshRef.current.scale.set(scaleVec.x, scaleVec.y, 1)
+  }
+
   return (
-    <instancedMesh
-      ref={meshRef}
-      args={[undefined, undefined, sum(vertexCountPerCurve)]}>
-      <planeGeometry args={[1 * size.x, 1 * aspectRatio * size.y]}>
-        <instancedBufferAttribute
-          attach='attributes-pointInfo'
-          args={[pointProgress, 2]}
-        />
-      </planeGeometry>
-      <shaderMaterial
-        transparent
-        uniforms={{
-          progress: { value: 0 },
-          progressTex: { value: progressTex },
-          keyframeCount: { value: keyframeCount },
-          pointsTex: { value: pointsTex },
-          colorTex: { value: colorTex },
-          jitter: { value: jitter },
-          resolution: { value: resolution },
-          size: { value: size }
-        }}
-        vertexShader={
-          /*glsl*/ `
+    <ChildComponent
+      options={{ ...props }}
+      getSelf={() => null}
+      defaultDraw={(self, frame, ctx) => draw(ctx.time)}>
+      <instancedMesh
+        ref={meshRef}
+        args={[undefined, undefined, sum(vertexCountPerCurve)]}>
+        <planeGeometry args={[size.x, size.y]}>
+          <instancedBufferAttribute
+            attach='attributes-pointInfo'
+            args={[pointProgress, 2]}
+          />
+        </planeGeometry>
+        <shaderMaterial
+          transparent
+          uniforms={{
+            progress: { value: 0 },
+            progressTex: { value: progressTex },
+            keyframeCount: { value: keyframeCount },
+            pointsTex: { value: pointsTex },
+            colorTex: { value: colorTex },
+            jitter: { value: jitter },
+            resolution: { value: resolution },
+            size: { value: size }
+          }}
+          vertexShader={
+            /*glsl*/ `
 struct Jitter {
   vec2 size;
   vec2 position;
@@ -318,8 +332,11 @@ ${multiBezier2(controlPointsCount)}
 ${rotate2d}
 ${hash}
 
-void main() {
+vec2 processVertex(vec2 position) {
+  ${vertexShader}
+}
 
+void main() {
   vec2 pixel = 1. / resolution;
   vUv = uv;
   // u to T mapping...
@@ -370,28 +387,33 @@ void main() {
     projectionMatrix 
     * modelViewMatrix 
     // * instanceMatrix
-    * vec4(thisPosition 
+    * vec4(processVertex(
+      thisPosition + jitterPosition
       + rotate2d(
-        position.xy * pixel * jitterSize * thisThickness
-          + jitterPosition, 
-        thisRotation + 1.5707 + jitterRotation),
+        position.xy * jitterSize * thisThickness, 
+        thisRotation + 1.5707 + jitterRotation) * pixel),
       0, 1);
 }`
-        }
-        fragmentShader={
-          /*glsl*/ `
+          }
+          fragmentShader={
+            /*glsl*/ `
+uniform float progress;
+uniform vec2 resolution;
 in vec2 vUv;
 in vec4 vColor;
 in float v_test;
-in float discardPoint;
 
+vec4 processColor (vec4 color, vec2 uv) {
+  ${fragmentShader}
+}
 void main() {
   // if (discardPoint == 1.) discard;
   // if (length(vUv - 0.5) > 0.707 - 0.2) discard;
-  gl_FragColor = vColor;
+  gl_FragColor = processColor(vColor, vUv);
 }`
-        }
-      />
-    </instancedMesh>
+          }
+        />
+      </instancedMesh>
+    </ChildComponent>
   )
 }

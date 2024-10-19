@@ -33,13 +33,13 @@ export type BrushSettings = {
   between: [number, number]
 }
 
-export const Brush = (
+export default function Brush(
   props: ChildProps<
     BrushSettings & { keyframes: Keyframes['keyframes'] },
-    null,
-    null
+    {},
+    {}
   >
-) => {
+) {
   let {
     keyframes,
     spacing = 0,
@@ -278,7 +278,9 @@ export const Brush = (
   return (
     <ChildComponent
       options={{ ...props }}
-      getSelf={() => null}
+      getSelf={() => {
+        return {}
+      }}
       defaultDraw={(self, frame, ctx) => draw(ctx.time)}>
       <instancedMesh
         ref={meshRef}

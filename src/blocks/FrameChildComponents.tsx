@@ -122,14 +122,16 @@ function TopLevelComponent({
   children,
   loop = true,
   className,
-  style,
-  showInfo
+  style = { height: '100vh', width: '100vw' },
+  showInfo,
+  progress = time => time
 }: {
   children?: AllowedChildren
   loop?: boolean | number
   className?: string
   style?: React.CSSProperties
   showInfo?: true
+  progress?: (time: number) => number
 }) {
   // the order to call draw calls in, using the key/string pairings from above
   let childrenDraws = useRef<string[]>([])
@@ -200,13 +202,16 @@ function TopLevelComponent({
 
     let animationFrame: number
     let interval: number
-    const drawFrame = (t: number, dt: number) => {
+    let lastProgress = 0
+    const drawFrame = (t: number) => {
+      const time = progress(t / 1000)
       const topContext: ReactiveContext = {
-        time: t,
-        deltaTime: dt,
+        time,
+        deltaTime: time - lastProgress,
         elements: elements.current,
         props: props.current
       }
+      lastProgress = time
       for (let drawChild of childrenDraws.current) {
         const component = components.current[drawChild]
         invariant(component.draw, 'Missing draw call')
@@ -221,17 +226,17 @@ function TopLevelComponent({
       }
     }
     if (loop === true) {
-      const frameRequest: FrameRequestCallback = () => {
+      const frameRequest: FrameRequestCallback = t => {
         // this prevents dropped frames
-        time.current += 1 / 60
-        drawFrame(time.current, 1 / 60)
+        time.current = t
+        drawFrame(time.current)
         animationFrame = requestAnimationFrame(frameRequest)
       }
       animationFrame = requestAnimationFrame(frameRequest)
     } else if (typeof loop === 'number') {
       interval = window.setInterval(() => {
         time.current += loop
-        drawFrame(time.current, loop)
+        drawFrame(time.current)
       }, loop * 1000)
     }
     return () => {

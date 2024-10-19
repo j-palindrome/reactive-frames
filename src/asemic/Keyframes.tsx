@@ -7,21 +7,27 @@ const scale = (i: number, from = 0, to = 1, exp = 1) => {
 }
 
 type Coord = [number, number]
+
+type Keyframe = {
+  curves: Point[][]
+  position?: Vector2
+  scale?: Vector2
+  rotation?: number
+}
 export default class Keyframes {
-  keyframes: {
-    curves: Point[][]
-    position?: Vector2
-    scale?: Vector2
-    rotation?: number
-  }[]
+  keyframes: Keyframe[]
 
   targetFrame: number
   targetCurves: [number, number]
   curveCount: number
   vector: Vector2
 
-  then(time: number, timeCurve?: number) {
-    this.keyframes.push(cloneDeep(last(this.keyframes)!))
+  then(frame?: Omit<Keyframe, 'curves'>) {
+    const newKeyframe = {
+      ...cloneDeep(last(this.keyframes)),
+      ...frame
+    } as Keyframe
+    this.keyframes.push(newKeyframe)
     this.targetFrame += 1
     return this
   }
@@ -48,57 +54,6 @@ export default class Keyframes {
     return this
   }
 
-  line(end: Coord) {
-    const addition = new Vector2(...end)
-    const halfway = new Vector2().lerpVectors(new Vector2(), addition, 0.5)
-    this.iterate(curve => {
-      const lastPoint = last(curve)!
-      curve.forEach(
-        point => {
-          position: new Vector2().addVectors(lastPoint.position, halfway)
-        },
-        {
-          position: new Vector2().addVectors(lastPoint.position, addition)
-        }
-      )
-    })
-    return this
-  }
-
-  curve(midpoint: Coord, end: Coord) {
-    const mp = new Vector2(...midpoint)
-    const ep = new Vector2(...end)
-    this.iterate(curve => {
-      const lastPoint = last(curve)!
-      curve.push(
-        { position: new Vector2().addVectors(lastPoint.position, mp) },
-        { position: new Vector2().addVectors(lastPoint.position, ep) }
-      )
-    })
-    return this
-  }
-
-  spiral(rotations: number, distance: number) {
-    // const eachRotation = 0.25 * Math.PI * 2
-    const ROTATIONS = 8
-    const numVectors = rotations * ROTATIONS
-    this.iterate((curve, index) => {
-      let thisDistance = 0
-      const lastPoint = last(curve)!.position
-      let angle = 0
-      for (let i = 0; i < numVectors; i++) {
-        angle = (angle + 1 / ROTATIONS) % 1
-        thisDistance += distance / numVectors
-        curve.push({
-          position: new Vector2(0, thisDistance)
-            .rotateAround({ x: 0, y: 0 }, angle * Math.PI * 2)
-            .add(lastPoint)
-        })
-      }
-    })
-    return this
-  }
-
   random(variation: Coord) {
     const variationV = new Vector2(...variation)
     this.iterate((curve, i) => {
@@ -117,29 +72,33 @@ export default class Keyframes {
     return this
   }
 
-  rotate(from: number, to?: number) {
+  twist(from: [number, number], to?: [number, number]) {
     if (to === undefined) to = from
     this.iterate((curve, progress) => {
-      curve.forEach(point => {
+      curve.forEach((point, i) => {
+        const pointProgress = i / (curve.length - 1)
+        const thisFrom = lerp(from[0], from[1], pointProgress)
+        const thisTo = lerp(to[0], to[1], pointProgress)
         point.position.rotateAround(
           curve[0].position,
-          scale(progress, from, to) * Math.PI * 2
+          lerp(thisFrom, thisTo, progress) * Math.PI * 2
         )
       })
     })
     return this
   }
 
-  scale(from: Coord, to?: Coord) {
+  stretch(from: Coord, to?: Coord) {
     if (to === undefined) to = from
     const fromV = new Vector2(...from)
     const toV = new Vector2(...to)
     this.iterate((curve, progress) => {
-      const startPos = curve[0].position.clone()
-      curve.forEach(point => {
-        point.position
-          .sub(curve[0].position)
-          .multiply(this.vector.lerpVectors(fromV, toV, progress))
+      const destination = this.vector.addVectors(
+        this.vector.lerpVectors(fromV, toV, progress),
+        curve[0].position
+      )
+      curve.forEach((point, i) => {
+        point.position.lerp(destination, i / Math.max(1, curve.length - 1))
       })
     })
     return this

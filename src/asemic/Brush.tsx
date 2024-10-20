@@ -10,6 +10,8 @@ import { rotate2d } from '../../util/src/shaders/manipulation'
 import Keyframes from './Keyframes'
 import { ChildProps } from '../types'
 import { ChildComponent } from '../blocks/FrameChildComponents'
+import { Fbo } from '@react-three/drei'
+import KeyframeRender from './KeyframeRender'
 
 const degree = 2
 const targetVector = new THREE.Vector2()
@@ -176,7 +178,7 @@ export default function Brush(
 
   const { pointsTex, colorTex, progressTex } = useMemo(() => {
     const createTexture = (
-      getPoint: (point: Point) => number[],
+      getPoint: (point: CurvePoint) => number[],
       format: THREE.AnyPixelFormat
     ) => {
       const array = new Float32Array(

@@ -21,6 +21,7 @@
     "@luma.gl/engine": "^9.0.27",
     "@luma.gl/webgl": "^9.0.27",
     "@react-spring/three": "^9.7.5",
+    "@react-three/drei": "^9.114.5",
     "@react-three/fiber": "^8.17.10",
     "@react-three/postprocessing": "^2.16.3",
     "@types/animejs": "^3.1.12",

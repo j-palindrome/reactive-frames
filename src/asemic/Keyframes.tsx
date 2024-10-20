@@ -1,32 +1,67 @@
 import { cloneDeep, last, range } from 'lodash'
 import { Vector2 } from 'three'
-import { lerp } from 'three/src/math/MathUtils.js'
 
-const scale = (i: number, from = 0, to = 1, exp = 1) => {
-  return i * (to - from) ** exp + from
+export class PointVector extends Vector2 {
+  pointProgress: number
+  curveProgress: number
+  origin: Vector2
+
+  constructor(
+    points: [number, number] = [0, 0],
+    pointProgress: number,
+    curveProgress: number,
+    origin?: Vector2
+  ) {
+    super(points[0], points[1])
+    this.pointProgress = pointProgress
+    this.curveProgress = curveProgress
+    this.origin = origin ?? new Vector2(points[0], points[1])
+  }
+
+  twist(from: Vector2, amount: number) {
+    this.rotateAround(from, amount * Math.PI * 2)
+  }
+
+  pull(from: Vector2, to: Vector2, amount: number) {
+    this.sub(from).lerp(to, amount).add(from)
+  }
+
+  stretch(from: Vector2, amount: number) {
+    this.sub(from).multiplyScalar(amount).add(from)
+  }
+
+  randomize(from: Vector2, amount: Vector2) {
+    this.add(
+      vector
+        .random()
+        .subScalar(0.5)
+        .multiply(vector2.copy(amount))
+        .rotateAround({ x: 0, y: 0 }, from.angleTo(this))
+    )
+  }
+
+  grid(size: Vector2, grid: Vector2, progress: number) {
+    progress *= grid[0] * grid[1]
+    const gridV = vector
+      .set((progress % grid[0]) / grid[0], Math.floor(progress % grid[1]))
+      .divide(grid)
+    this.add(gridV.multiply(size))
+  }
 }
 
-type Coord = [number, number]
-
-type Keyframe = {
-  curves: Point[][]
-  position?: Vector2
-  scale?: Vector2
-  rotation?: number
-}
+const vector = new Vector2()
+const vector2 = new Vector2()
 export default class Keyframes {
-  keyframes: Keyframe[]
-
+  keyframes: KeyframeData[]
   targetFrame: number
   targetCurves: [number, number]
   curveCount: number
-  vector: Vector2
 
-  then(frame?: Omit<Keyframe, 'curves'>) {
+  then(frame?: Omit<KeyframeData, 'curves'>) {
     const newKeyframe = {
       ...cloneDeep(last(this.keyframes)),
       ...frame
-    } as Keyframe
+    } as KeyframeData
     this.keyframes.push(newKeyframe)
     this.targetFrame += 1
     return this
@@ -35,93 +70,45 @@ export default class Keyframes {
   constructor(curveCount: number, pointCount: number) {
     this.keyframes = [
       {
-        curves: range(curveCount).map(i =>
-          range(pointCount).map(i => ({ position: new Vector2() }))
-        )
+        curves: range(curveCount).map(i => {
+          const origin = new PointVector([0, 0], 0, 0)
+          return range(pointCount).map(j => ({
+            position:
+              j === 0
+                ? origin
+                : new PointVector(
+                    [0, 0],
+                    j / pointCount,
+                    i / curveCount,
+                    origin
+                  )
+          }))
+        })
       }
     ]
+
     this.targetCurves = [0, curveCount]
     this.targetFrame = 0
     this.curveCount = curveCount
-    this.vector = new Vector2()
   }
 
-  clear() {
-    this.iterate(curve => {
-      curve.splice(1, curve.length - 1)
-      curve[0] = { position: new Vector2() }
-    })
+  copy(keyframe: number) {
+    if (keyframe < 0) keyframe += this.keyframes.length
+    this.keyframes.push(cloneDeep(this.keyframes[keyframe]))
     return this
   }
 
-  random(variation: Coord) {
-    const variationV = new Vector2(...variation)
-    this.iterate((curve, i) => {
-      curve.forEach((point, i) => {
-        const heading = curve[i + 1]
-          ? point.position.angleTo(curve[i + 1].position)
-          : curve[i - 1].position.angleTo(point.position)
-        point.position.add(
-          this.vector
-            .random()
-            .subScalar(0.5)
-            .multiply(variationV.clone().rotateAround({ x: 0, y: 0 }, heading))
-        )
-      })
-    })
-    return this
-  }
-
-  twist(from: [number, number], to?: [number, number]) {
-    if (to === undefined) to = from
-    this.iterate((curve, progress) => {
-      curve.forEach((point, i) => {
-        const pointProgress = i / (curve.length - 1)
-        const thisFrom = lerp(from[0], from[1], pointProgress)
-        const thisTo = lerp(to[0], to[1], pointProgress)
-        point.position.rotateAround(
-          curve[0].position,
-          lerp(thisFrom, thisTo, progress) * Math.PI * 2
-        )
-      })
-    })
-    return this
-  }
-
-  stretch(from: Coord, to?: Coord) {
-    if (to === undefined) to = from
-    const fromV = new Vector2(...from)
-    const toV = new Vector2(...to)
-    this.iterate((curve, progress) => {
-      const destination = this.vector.addVectors(
-        this.vector.lerpVectors(fromV, toV, progress),
-        curve[0].position
-      )
-      curve.forEach((point, i) => {
-        point.position.lerp(destination, i / Math.max(1, curve.length - 1))
-      })
-    })
-    return this
-  }
-
-  translate(from: Coord, to?: Coord) {
-    if (to === undefined) to = from
-    const fromV = new Vector2(...from)
-    const toV = new Vector2(...to)
-    this.iterate((curve, progress) => {
-      curve.forEach(point => {
-        point.position.add(this.vector.lerpVectors(fromV, toV, progress))
-      })
-    })
-    return this
-  }
-
-  private iterate(callback: (curve: Point[], progress: number) => void) {
+  warp(callback: (point: CurvePoint) => void) {
     const total = this.targetCurves[1] - this.targetCurves[0]
+    const origin = new Vector2()
     for (let i = this.targetCurves[0]; i < this.targetCurves[1]; i++) {
       const curve = this.keyframes[this.targetFrame].curves[i]
       const progress = i / total
-      callback(curve, progress)
+      origin.copy(curve[0].position)
+      curve.forEach((point, i) => {
+        callback(point)
+      })
     }
+    return this
   }
 }

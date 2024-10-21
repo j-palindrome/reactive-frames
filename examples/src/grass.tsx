@@ -12,7 +12,6 @@ export default function Grass() {
       point.position.pointProgress
     )
   })
-  console.log('kf', kf.keyframes)
 
   return (
     <Reactive progress={t => t % 1}>

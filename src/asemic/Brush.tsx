@@ -32,7 +32,8 @@ export type BrushSettings = {
   rotation?: number
   fragmentShader?: string
   vertexShader?: string
-  between: [number, number]
+  between?: [number, number]
+  type?: '2d' | '3d'
 }
 
 export default function Brush(
@@ -53,7 +54,8 @@ export default function Brush(
     jitter,
     fragmentShader = /*glsl*/ `return color;`,
     vertexShader = /*glsl*/ `return position;`,
-    between = [0, 1]
+    between = [0, 1],
+    type = '2d'
   } = props
   jitter = {
     size: new Vector2(0, 0),

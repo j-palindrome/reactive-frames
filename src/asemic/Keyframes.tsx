@@ -78,8 +78,8 @@ export default class Keyframes {
                 ? origin
                 : new PointVector(
                     [0, 0],
-                    j / pointCount,
-                    i / curveCount,
+                    j / Math.max(1, pointCount - 1),
+                    i / Math.max(1, curveCount - 1),
                     origin
                   )
           }))
@@ -95,6 +95,16 @@ export default class Keyframes {
   copy(keyframe: number) {
     if (keyframe < 0) keyframe += this.keyframes.length
     this.keyframes.push(cloneDeep(this.keyframes[keyframe]))
+    return this
+  }
+
+  set(setCurve: [number, number][]) {
+    for (let i = this.targetCurves[0]; i < this.targetCurves[1]; i++) {
+      const curve = this.keyframes[this.targetFrame].curves[i]
+      curve.forEach((point, i) => {
+        point.position.set(setCurve[i][0], setCurve[i][1])
+      })
+    }
     return this
   }
 

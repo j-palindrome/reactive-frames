@@ -9,9 +9,13 @@ const degree = 2
 const targetVector = new Vector2()
 
 export function useKeyframes({
-  keyframes
+  keyframes,
+  color = new THREE.Color(1, 1, 1),
+  alpha = 1
 }: {
   keyframes: Keyframes['keyframes']
+  color?: THREE.Color
+  alpha?: number
 }) {
   const keyframeCount = keyframes.length
   const curveCount = keyframes[0].curves.length
@@ -25,7 +29,7 @@ export function useKeyframes({
     const curveLengths = range(keyframes[0].curves.length).flatMap(() => 0)
 
     keyframes.forEach(keyframe => {
-      return keyframe.curves.map((curve, i) => {
+      return keyframe.curves.map((curve, j) => {
         // interpolate the bezier curves which are too short
         if (curve.length < controlPointsCount) {
           let i = 0
@@ -39,7 +43,9 @@ export function useKeyframes({
                 curve[i + 1].thickness ?? 1,
                 0.5
               ),
-              alpha: lerp(curve[i].alpha ?? 1, curve[i + 1].alpha ?? 1, 0.5)
+              alpha: lerp(curve[i].alpha ?? 1, curve[i + 1].alpha ?? 1, 0.5),
+              curveProgress: j / keyframe.curves.length,
+              pointProgress: i / (controlPointsCount - 1)
             })
             i += 2
             if (i >= curve.length - 2) i -= curve.length - 2
@@ -68,7 +74,7 @@ export function useKeyframes({
         console.log(curvePath.getCurveLengths(), length)
 
         // We sample each curve according to its maximum keyframe length
-        if (length > curveLengths[i]) curveLengths[i] = length
+        if (length > curveLengths[j]) curveLengths[j] = length
       })
     })
 
@@ -111,7 +117,10 @@ export function useKeyframes({
     }, THREE.RGBAFormat)
 
     const colorTex = createTexture(
-      point => [...(point.color?.toArray() ?? [1, 1, 1]), point.alpha ?? 1],
+      point => [
+        ...(point.color?.toArray() ?? color.toArray()),
+        point.alpha ?? alpha
+      ],
       THREE.RGBAFormat
     )
     return { pointsTex, colorTex }

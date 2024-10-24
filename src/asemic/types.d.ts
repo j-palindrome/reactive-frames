@@ -7,6 +7,8 @@ declare global {
     thickness?: number
     alpha?: number
     color?: Color
+    curveProgress: number
+    pointProgress: number
   }
 
   type KeyframeData = {

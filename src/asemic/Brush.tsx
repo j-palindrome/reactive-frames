@@ -3,7 +3,7 @@ import { range } from 'lodash'
 import { useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { Vector2 } from 'three'
-import { multiBezier2 } from '../../util/src/shaders/bezier'
+import { bezier3, multiBezier2 } from '../../util/src/shaders/bezier'
 import { rotate2d } from '../../util/src/shaders/manipulation'
 import { hash } from '../../util/src/shaders/utilities'
 import { ChildComponent } from '../blocks/FrameChildComponents'
@@ -12,19 +12,21 @@ import { ChildProps } from '../types'
 const degree = 2
 const targetVector = new THREE.Vector2()
 
+type VectorList = [number, number]
+type Vector3List = [number, number, number]
 export type BrushSettings = {
   spacing?: number
-  size?: Vector2
+  size?: VectorList
   alpha?: number
   jitter?: {
-    size?: Vector2
-    position?: Vector2
-    hsl?: THREE.Vector3
+    size?: VectorList
+    position?: VectorList
+    hsl?: Vector3List
     a?: number
     rotation?: number
   }
-  position?: Vector2
-  scale?: Vector2
+  position?: VectorList
+  scale?: VectorList
   rotation?: number
   fragmentShader?: string
   vertexShader?: string
@@ -39,7 +41,7 @@ export type BrushSettings = {
 
 export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
   let {
-    spacing = 0,
+    spacing = 1,
     alpha = 1,
     curveLengths,
     controlPointsCount = 3,
@@ -57,14 +59,13 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
     type = '2d'
   } = props
   jitter = {
-    size: new Vector2(0, 0),
-    position: new Vector2(0, 0),
-    hsl: new THREE.Vector3(0, 0, 0),
+    size: [0, 0],
+    position: [0, 0],
+    hsl: [0, 0, 0],
     a: 0,
     rotation: 0,
     ...jitter
   }
-  console.log(curveLengths)
 
   const resolution = useThree(scene =>
     scene.gl.getDrawingBufferSize(targetVector)
@@ -81,8 +82,7 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
     let pointCount = 0
     const pointProgress = Float32Array.from(
       curveLengths.flatMap((curveLength, curveI) => {
-        const pointsInCurve = (curveLength * resolution.x) / (size.y + spacing)
-        console.log('length:', curveLength, 'points:', pointsInCurve)
+        const pointsInCurve = (curveLength * resolution.x) / (spacing * size[0])
 
         pointCount += pointsInCurve
         return range(pointsInCurve).flatMap(vertexI => {
@@ -142,7 +142,7 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
         draw(ctx.time)
       }}>
       <instancedMesh ref={meshRef} args={[undefined, undefined, pointCount]}>
-        <planeGeometry args={[size.x, size.y]}>
+        <planeGeometry args={[size[0], size[1]]}>
           <instancedBufferAttribute
             attach='attributes-pointInfo'
             args={[pointProgress, 2]}
@@ -157,7 +157,7 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
             jitter: { value: jitter },
             resolution: { value: resolution },
             size: { value: size },
-            keyframeCount: { value: keyframeCount }
+            keyframeCount: { value: keyframeCount - 1 }
           }}
           vertexShader={
             /*glsl*/ `
@@ -192,6 +192,7 @@ out vec4 vColor;
 out float v_test;
 out float discardPoint;
 
+${bezier3}
 ${multiBezier2(controlPointsCount)}
 ${rotate2d}
 ${hash}
@@ -205,21 +206,19 @@ void main() {
   vUv = uv;
 
   // u to T mapping...
-  float keyframeProgress = (progress * (1. - 1. / keyframeCount) + 0.5 / keyframeCount);
+  float keyframeProgress = progress * keyframeCount;
   float curveProgress = pointInfo.y;
   float pointProgress = pointInfo.x;
 
   #ifdef FORMAT_3D
-  vec2[${controlPointsCount}] points = vec2[${controlPointsCount}](
-    ${range(controlPointsCount)
-      .map(
-        i =>
-          /*glsl*/ `texture(pointsTex, vec3(${i}. / ${
-            controlPointsCount - 1
-          }., curveProgress, keyframeProgress)).xy`
-      )
-      .join(', ')}
-  );
+  vec2[${controlPointsCount}] points;
+  vec4 point0, point1;
+  float mappedKeyframeProgress = bezier3(fract(keyframeProgress), vec2(0, 0), vec2(0.5, 0.1), vec2(0.5, 0.9), vec2(1, 1)).y;
+  for (int i = 0; i < ${controlPointsCount}; i ++) {
+    point0 = texture(pointsTex, vec3(float(i) / ${controlPointsCount}., curveProgress, floor(keyframeProgress) / keyframeCount));
+    point1 = texture(pointsTex, vec3(float(i) / ${controlPointsCount}., curveProgress, ceil(keyframeProgress) / keyframeCount));
+    points[i] = mix(point0, point1, mappedKeyframeProgress).xy;
+  }
   #endif
   #ifdef FORMAT_2D
   vec2[${controlPointsCount}] points = vec2[${controlPointsCount}](
@@ -240,12 +239,22 @@ void main() {
   float thisRotation = point.rotation;
 
   #ifdef FORMAT_3D
-  float thisThickness = texture(
+  float thickA = texture(
     pointsTex, 
-    vec3(pointProgress, curveProgress, keyframeProgress)).z;
+    vec3(pointProgress, curveProgress, floor(keyframeProgress) / keyframeCount)).z;
+  float thickB = texture(
+    pointsTex, 
+    vec3(pointProgress, curveProgress, ceil(keyframeProgress) / keyframeCount)).z;
+  float thisThickness = mix(thickA, thickB, fract(keyframeProgress));
+  vec4 colorA = texture(
+    colorTex, 
+    vec3(pointProgress, curveProgress, floor(keyframeProgress) / keyframeCount));
+  vec4 colorB = texture(
+    colorTex, 
+    vec3(pointProgress, curveProgress, ceil(keyframeProgress) / keyframeCount));
   vColor = texture(
     colorTex, 
-    vec3(pointProgress, curveProgress, keyframeProgress));
+    vec3(pointProgress, curveProgress, fract(keyframeProgress)));
   #endif
   #ifdef FORMAT_2D
   float thisThickness = texture(
@@ -294,8 +303,8 @@ vec4 processColor (vec4 color, vec2 uv) {
 }
 void main() {
   // if (discardPoint == 1.) discard;
-  if (length(vUv - 0.5) > 0.707 - 0.2) discard;
-  gl_FragColor = processColor(vec4(v_test, 1, 1, 1), vUv);
+  // if (length(vUv - 0.5) > 0.707 - 0.2) discard;
+  gl_FragColor = processColor(vColor, vUv);
 }`
           }
         />

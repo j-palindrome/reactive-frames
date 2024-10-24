@@ -5,7 +5,7 @@ import Brush from '../../src/asemic/Brush'
 import Keyframes from '../../src/asemic/Keyframes'
 
 export default function Grass() {
-  const kf = new Keyframes(1, 5).warp(point => {
+  const kf = new Keyframes(1, 5).eachPoint(point => {
     point.position.pull(
       point.position.origin,
       new Vector2(1, 1),

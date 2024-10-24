@@ -9,40 +9,32 @@ import { groupArrayBy } from '../../util/src/three'
 
 export default function ParticlesTest() {
   const points = range(5).map(() => new Vector2().random().toArray())
-  // const points = []
-  // for (let i = 0; i < prePoints.length; i += 2) {
-  //   points.push([prePoints[i], prePoints[i + 1]])
-  // }
   const keyframeInfo = useKeyframes({
-    keyframes: new Keyframes(1, 5).set(points).keyframes
+    keyframes: new Keyframes(2000, 5)
+      .set(points)
+      .eachPoint(point => point.position.multiplyScalar(2))
+      .copy(0)
+      .target(0)
+      .eachPoint(point => point.position.multiplyScalar(point.curveProgress))
+      .target(1)
+      .eachPoint(point =>
+        point.position.multiplyScalar(1 - point.curveProgress)
+      )
+      .interpolate(0)
+      .target(1)
+      .eachCurve(x => x.reverse())
+      .interpolate(1)
+      .eachCurve(x => x.reverse())
+      .target(0, -1)
+      .eachPoint(p => p.position.randomize([0, 1])).keyframes,
+    alpha: 0.1
   })
-  console.log(points)
 
   return (
-    <Reactive progress={t => t % 1}>
+    <Reactive progress={t => (t / 2) % 1}>
       <Asemic name='a'>
-        <Brush
-          name='b'
-          {...keyframeInfo}
-          size={new Vector2(10, 10)}
-          spacing={10}
-        />
+        <Brush name='b' {...keyframeInfo} size={[1, 1]} />
       </Asemic>
-      <Canvas2D
-        name='c2d'
-        className='!w-full !h-full absolute top-0 left-0'
-        draw={self => {
-          self.beginPath()
-          self.strokeStyle = 'red'
-          self.lineWidth = 1
-          for (let point of points) {
-            self.lineTo(
-              point[0] * window.innerWidth * 2,
-              window.innerHeight * 2 - point[1] * window.innerHeight * 2
-            )
-          }
-          self.stroke()
-        }}></Canvas2D>
     </Reactive>
   )
 }

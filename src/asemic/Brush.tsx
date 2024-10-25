@@ -178,6 +178,7 @@ uniform sampler3D colorTex;
 uniform float progress;
 uniform float keyframeCount;
 #endif
+
 #ifdef FORMAT_2D
 uniform sampler2D pointsTex;
 uniform sampler2D colorTex;
@@ -194,6 +195,9 @@ out float discardPoint;
 
 ${bezier3}
 ${multiBezier2(controlPointsCount)}
+${
+  controlPointsCount !== keyframeCount ? multiBezier2(keyframeCount, false) : ''
+}
 ${rotate2d}
 ${hash}
 
@@ -212,14 +216,15 @@ void main() {
 
   #ifdef FORMAT_3D
   vec2[${controlPointsCount}] points;
-  vec4 point0, point1;
-  float mappedKeyframeProgress = bezier3(fract(keyframeProgress), vec2(0, 0), vec2(0.5, 0.1), vec2(0.5, 0.9), vec2(1, 1)).y;
   for (int i = 0; i < ${controlPointsCount}; i ++) {
-    point0 = texture(pointsTex, vec3(float(i) / ${controlPointsCount}., curveProgress, floor(keyframeProgress) / keyframeCount));
-    point1 = texture(pointsTex, vec3(float(i) / ${controlPointsCount}., curveProgress, ceil(keyframeProgress) / keyframeCount));
-    points[i] = mix(point0, point1, mappedKeyframeProgress).xy;
+    vec2[${keyframeCount}] kfPoints;
+    for (int j = 0; j < ${keyframeCount}; j ++) {
+      kfPoints[j] = texture(pointsTex, vec3(float(i) / ${controlPointsCount}., curveProgress, float(j) / keyframeCount)).xy;
+    }
+    points[i] = multiBezier2(progress, kfPoints, vec2(1, 1)).position;
   }
   #endif
+
   #ifdef FORMAT_2D
   vec2[${controlPointsCount}] points = vec2[${controlPointsCount}](
     ${range(controlPointsCount)
@@ -234,7 +239,7 @@ void main() {
   #endif
 
   BezierPoint point = multiBezier2(pointProgress, points, resolution);
-  v_test = fract(pointProgress * subdivisions);
+  v_test = progress;
   vec2 thisPosition = point.position;
   float thisRotation = point.rotation;
 
@@ -256,6 +261,7 @@ void main() {
     colorTex, 
     vec3(pointProgress, curveProgress, fract(keyframeProgress)));
   #endif
+  
   #ifdef FORMAT_2D
   float thisThickness = texture(
     pointsTex, 
@@ -304,7 +310,8 @@ vec4 processColor (vec4 color, vec2 uv) {
 void main() {
   // if (discardPoint == 1.) discard;
   // if (length(vUv - 0.5) > 0.707 - 0.2) discard;
-  gl_FragColor = processColor(vColor, vUv);
+  // gl_FragColor = processColor(vColor, vUv);
+  gl_FragColor = processColor(vec4(v_test, 1, 1, 1), vUv);
 }`
           }
         />

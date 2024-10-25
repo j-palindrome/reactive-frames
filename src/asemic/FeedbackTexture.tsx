@@ -1,9 +1,11 @@
 import { useFBO } from '@react-three/drei'
-import { createPortal, useFrame } from '@react-three/fiber'
+import { createPortal, useFrame, useThree } from '@react-three/fiber'
 import { range } from 'lodash'
 import { forwardRef, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { PlaneGeometry } from 'three'
+import { ChildComponent } from '../blocks/FrameChildComponents'
+import { ChildProps } from '../types'
 
 const vert = /*glsl*/ `
 out vec2 vUv;
@@ -14,18 +16,24 @@ void main() {
 }
 `
 
-type FeedbackTextureRef = {
+export type FeedbackTextureRef = {
   texture: THREE.Texture
 }
 
 const FeedbackTexture = forwardRef<
   FeedbackTextureRef,
-  {
-    fragmentShader: string
-    width: number
-    height: number
-  }
->(({ fragmentShader, width, height }, ref) => {
+  ChildProps<
+    {
+      fragmentShader: string
+      width: number
+      height: number
+      uniforms?: Record<string, { value: any }>
+    },
+    {},
+    {}
+  >
+>((props, ref) => {
+  const { fragmentShader, width, height, uniforms } = props
   const { scene, camera } = useMemo(
     () => ({
       scene: new THREE.Scene(),
@@ -64,12 +72,13 @@ void main() {
   )
 
   let currentFrame = useRef(0)
-  useFrame(state => {
-    const { gl } = state
+  const { gl } = useThree()
+  const draw = (progress: number) => {
     const thisBuffer = renderTargets[currentFrame.current]
     currentFrame.current = currentFrame.current ? 0 : 1
     const lastBuffer = renderTargets[currentFrame.current]
     feedbackMesh.current.material.uniforms.feedback.value = lastBuffer.texture
+    feedbackMesh.current.material.uniforms.progress.value = progress
 
     gl.setRenderTarget(thisBuffer)
     gl.clear()
@@ -77,10 +86,17 @@ void main() {
     gl.setRenderTarget(null)
     const r = ref as React.MutableRefObject<FeedbackTextureRef>
     r.current.texture = thisBuffer.texture
-  })
+  }
 
   return (
-    <>
+    <ChildComponent
+      options={{ ...props }}
+      getSelf={() => {
+        return {}
+      }}
+      defaultDraw={(self, parent, ctx) => {
+        draw(ctx.time)
+      }}>
       {createPortal(
         <mesh position={[0.5, 0.5, 0]} ref={feedbackMesh}>
           <planeGeometry args={[1, 1]} />
@@ -89,13 +105,14 @@ void main() {
             vertexShader={vert}
             uniforms={{
               feedback: { value: renderTargets[0].texture },
-              resolution: { value: new THREE.Vector2(width, height) }
+              resolution: { value: new THREE.Vector2(width, height) },
+              ...uniforms
             }}
           />
         </mesh>,
         scene
       )}
-    </>
+    </ChildComponent>
   )
 })
 

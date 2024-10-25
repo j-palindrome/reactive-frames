@@ -8,8 +8,8 @@ import { rotate2d } from '../../util/src/shaders/manipulation'
 import { hash } from '../../util/src/shaders/utilities'
 import { ChildComponent } from '../blocks/FrameChildComponents'
 import { ChildProps } from '../types'
+import FeedbackTexture, { FeedbackTextureRef } from './FeedbackTexture'
 
-const degree = 2
 const targetVector = new THREE.Vector2()
 
 type VectorList = [number, number]
@@ -99,6 +99,10 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
     return { pointProgress, pointCount }
   }, [resolution])
 
+  const feedback = useRef<FeedbackTextureRef>({
+    texture: new THREE.DataTexture()
+  })
+
   const draw = (progress: number) => {
     if (progress < between[0] || progress > between[1]) {
       meshRef.current.visible = false
@@ -110,6 +114,7 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
     const mappedTime = (progress - between[0]) / (between[1] - between[0])
 
     meshRef.current.material.uniforms.progress.value = mappedTime
+    meshRef.current.material.uniforms.pointsTex.value = feedback.current.texture
     meshRef.current.material.uniformsNeedUpdate = true
 
     // let thisKey = Math.floor(mappedTime * (keyframeCount - 1))
@@ -141,6 +146,37 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
       defaultDraw={(self, frame, ctx) => {
         draw(ctx.time)
       }}>
+      <FeedbackTexture
+        name={`${props.name}-pointsTex`}
+        ref={feedback}
+        width={controlPointsCount}
+        height={1}
+        uniforms={{
+          pointsTex: { value: pointsTex },
+          progress: { value: 0 }
+        }}
+        fragmentShader={
+          /*glsl*/ `
+          in vec2 vUv;
+          uniform sampler3D pointsTex;
+          uniform float progress;
+
+          ${multiBezier2(keyframeCount)}
+
+          void main() {
+
+            vec2[${keyframeCount}] kfPoints;
+            for (int j = 0; j < ${keyframeCount}; j ++) {
+              kfPoints[j] = texture(pointsTex, vec3(float(i) / ${controlPointsCount}., curveProgress, float(j) / ${
+            keyframeCount - 1
+          })).xy;
+            }
+
+            gl_FragColor = vec4(multiBezier2(progress, kfPoints, vec2(1, 1)).position, 1, 1);
+          }
+          `
+        }
+      />
       <instancedMesh ref={meshRef} args={[undefined, undefined, pointCount]}>
         <planeGeometry args={[size[0], size[1]]}>
           <instancedBufferAttribute
@@ -151,17 +187,14 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
         <shaderMaterial
           transparent
           uniforms={{
-            progress: { value: 0 },
-            pointsTex: { value: pointsTex },
             colorTex: { value: colorTex },
+            pointsTex: { value: feedback.current.texture },
             jitter: { value: jitter },
             resolution: { value: resolution },
-            size: { value: size },
-            keyframeCount: { value: keyframeCount - 1 }
+            size: { value: size }
           }}
           vertexShader={
             /*glsl*/ `
-#define FORMAT_3D 1
 struct Jitter {
   vec2 size;
   vec2 position;
@@ -172,18 +205,8 @@ struct Jitter {
 
 in vec2 pointInfo;
 
-#ifdef FORMAT_3D
-uniform sampler3D pointsTex;
-uniform sampler3D colorTex;
-uniform float progress;
-uniform float keyframeCount;
-#endif
-
-#ifdef FORMAT_2D
 uniform sampler2D pointsTex;
 uniform sampler2D colorTex;
-#endif
-
 uniform vec2 resolution;
 uniform vec2 size;
 uniform Jitter jitter;
@@ -193,11 +216,7 @@ out vec4 vColor;
 out float v_test;
 out float discardPoint;
 
-${bezier3}
 ${multiBezier2(controlPointsCount)}
-${
-  controlPointsCount !== keyframeCount ? multiBezier2(keyframeCount, false) : ''
-}
 ${rotate2d}
 ${hash}
 
@@ -214,18 +233,6 @@ void main() {
   float curveProgress = pointInfo.y;
   float pointProgress = pointInfo.x;
 
-  #ifdef FORMAT_3D
-  vec2[${controlPointsCount}] points;
-  for (int i = 0; i < ${controlPointsCount}; i ++) {
-    vec2[${keyframeCount}] kfPoints;
-    for (int j = 0; j < ${keyframeCount}; j ++) {
-      kfPoints[j] = texture(pointsTex, vec3(float(i) / ${controlPointsCount}., curveProgress, float(j) / keyframeCount)).xy;
-    }
-    points[i] = multiBezier2(progress, kfPoints, vec2(1, 1)).position;
-  }
-  #endif
-
-  #ifdef FORMAT_2D
   vec2[${controlPointsCount}] points = vec2[${controlPointsCount}](
     ${range(controlPointsCount)
       .map(
@@ -236,40 +243,17 @@ void main() {
       )
       .join(', ')}
   );
-  #endif
 
   BezierPoint point = multiBezier2(pointProgress, points, resolution);
-  v_test = progress;
   vec2 thisPosition = point.position;
   float thisRotation = point.rotation;
-
-  #ifdef FORMAT_3D
-  float thickA = texture(
-    pointsTex, 
-    vec3(pointProgress, curveProgress, floor(keyframeProgress) / keyframeCount)).z;
-  float thickB = texture(
-    pointsTex, 
-    vec3(pointProgress, curveProgress, ceil(keyframeProgress) / keyframeCount)).z;
-  float thisThickness = mix(thickA, thickB, fract(keyframeProgress));
-  vec4 colorA = texture(
-    colorTex, 
-    vec3(pointProgress, curveProgress, floor(keyframeProgress) / keyframeCount));
-  vec4 colorB = texture(
-    colorTex, 
-    vec3(pointProgress, curveProgress, ceil(keyframeProgress) / keyframeCount));
-  vColor = texture(
-    colorTex, 
-    vec3(pointProgress, curveProgress, fract(keyframeProgress)));
-  #endif
   
-  #ifdef FORMAT_2D
   float thisThickness = texture(
     pointsTex, 
     vec2(pointProgress, curveProgress)).z;
   vColor = texture(
     colorTex, 
     vec2(pointProgress, curveProgress));
-  #endif
 
   vec2 jitterPosition = jitter.position * pixel
     * (vec2(hash(thisPosition.x, .184 + progress), 
@@ -298,7 +282,6 @@ void main() {
           }
           fragmentShader={
             /*glsl*/ `
-uniform float progress;
 uniform vec2 resolution;
 in vec2 vUv;
 in vec4 vColor;

@@ -25,6 +25,7 @@ const FeedbackTexture = forwardRef<
   ChildProps<
     {
       fragmentShader: string
+      includes?: string
       width: number
       height: number
       uniforms?: Record<string, { value: any }>
@@ -33,7 +34,7 @@ const FeedbackTexture = forwardRef<
     {}
   >
 >((props, ref) => {
-  const { fragmentShader, width, height, uniforms } = props
+  const { fragmentShader, width, height, uniforms, includes } = props
   const { scene, camera } = useMemo(
     () => ({
       scene: new THREE.Scene(),
@@ -56,13 +57,16 @@ const FeedbackTexture = forwardRef<
 in vec2 vUv;
 
 uniform sampler2D feedback;
+uniform float progress;
+uniform float resolution;
 
+${includes ?? ''}
 vec3 solveFrag(vec3 lastPoint) {
   ${fragmentShader}
 }
 
 void main() {
-  vec3 fragColor = solveFrag(texture(feedback, vUv));
+  vec3 fragColor = solveFrag(texture(feedback, vUv).xyz);
   gl_FragColor = vec4(fragColor, 1);
 }
 `
@@ -77,15 +81,18 @@ void main() {
     const thisBuffer = renderTargets[currentFrame.current]
     currentFrame.current = currentFrame.current ? 0 : 1
     const lastBuffer = renderTargets[currentFrame.current]
-    feedbackMesh.current.material.uniforms.feedback.value = lastBuffer.texture
-    feedbackMesh.current.material.uniforms.progress.value = progress
 
     gl.setRenderTarget(thisBuffer)
+    feedbackMesh.current.material.uniforms.feedback.value = lastBuffer.texture
+    feedbackMesh.current.material.uniforms.progress.value = progress
+    feedbackMesh.current.material.uniformsNeedUpdate = true
     gl.clear()
     gl.render(scene, camera)
     gl.setRenderTarget(null)
+    // this gets around the Chrome freakout
+    feedbackMesh.current.material.uniforms.feedback.value = null
     const r = ref as React.MutableRefObject<FeedbackTextureRef>
-    r.current.texture = thisBuffer.texture
+    r.current.texture = lastBuffer.texture
   }
 
   return (
@@ -104,8 +111,11 @@ void main() {
             fragmentShader={frag}
             vertexShader={vert}
             uniforms={{
-              feedback: { value: renderTargets[0].texture },
+              feedback: {
+                value: undefined
+              },
               resolution: { value: new THREE.Vector2(width, height) },
+              progress: { value: 0 },
               ...uniforms
             }}
           />

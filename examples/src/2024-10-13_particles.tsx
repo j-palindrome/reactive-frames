@@ -8,15 +8,13 @@ import { groupArrayBy } from '../../util/src/three'
 
 export default function ParticlesTest() {
   const keyframeInfo = useKeyframes({
-    keyframes: new Keyframes(1000, 5)
+    keyframes: new Keyframes(200, 5)
       .eachPoint(p => p.position.randomize().addScalar(0.5))
       .copy(0, 2)
       .target(1)
-      .eachPoint(point => point.position.randomize())
-      .debug().keyframes,
+      .eachPoint(point => point.position.randomize()).keyframes,
     alpha: 0.1
   })
-
   return (
     <Reactive progress={t => (t / 2) % 1}>
       <Asemic name='a'>

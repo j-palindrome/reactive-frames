@@ -81,7 +81,7 @@ export function useKeyframes({
   // write keyframes to 3D data texture.
   // read them into the shaders.
 
-  const { pointsTex, colorTex } = useMemo(() => {
+  const { keyframesTex, colorTex } = useMemo(() => {
     const createTexture = (
       getPoint: (point: CurvePoint) => number[],
       format: THREE.AnyPixelFormat
@@ -109,7 +109,7 @@ export function useKeyframes({
       return tex
     }
 
-    const pointsTex = createTexture(point => {
+    const keyframesTex = createTexture(point => {
       return [...point.position.toArray(), point.thickness ?? 1, 0]
     }, THREE.RGBAFormat)
 
@@ -120,12 +120,12 @@ export function useKeyframes({
       ],
       THREE.RGBAFormat
     )
-    return { pointsTex, colorTex }
+    return { keyframesTex, colorTex }
   }, [keyframes])
 
   return {
     curveLengths,
-    pointsTex,
+    keyframesTex,
     colorTex,
     controlPointsCount,
     keyframeCount,

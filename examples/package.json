@@ -17,6 +17,7 @@
     "nice-color-palettes": "^4.0.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "stats.js": "^0.17.0",
     "testing": "link:",
     "three": "^0.165.0",
     "twgl.js": "^5.5.4",

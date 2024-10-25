@@ -35,7 +35,7 @@ export type BrushSettings = {
   curveLengths: number[]
   controlPointsCount: number
   keyframeCount: number
-  pointsTex: THREE.Texture
+  keyframesTex: THREE.Data3DTexture
   colorTex: THREE.Texture
 }
 
@@ -46,7 +46,7 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
     curveLengths,
     controlPointsCount = 3,
     keyframeCount = 1,
-    pointsTex,
+    keyframesTex,
     colorTex,
     size = new Vector2(1, 1),
     position = new Vector2(),
@@ -67,8 +67,8 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
     ...jitter
   }
 
-  const resolution = useThree(scene =>
-    scene.gl.getDrawingBufferSize(targetVector)
+  const resolution = useThree(state =>
+    state.gl.getDrawingBufferSize(targetVector)
   )
 
   const meshRef = useRef<
@@ -97,7 +97,7 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
       })
     )
     return { pointProgress, pointCount }
-  }, [resolution])
+  }, [resolution, curveCount])
 
   const feedback = useRef<FeedbackTextureRef>({
     texture: new THREE.DataTexture()
@@ -111,9 +111,9 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
       meshRef.current.visible = true
     }
 
-    const mappedTime = (progress - between[0]) / (between[1] - between[0])
+    // const mappedTime = (progress - between[0]) / (between[1] - between[0])
 
-    meshRef.current.material.uniforms.progress.value = mappedTime
+    // meshRef.current.material.uniforms.progress.value = mappedTime
     meshRef.current.material.uniforms.pointsTex.value = feedback.current.texture
     meshRef.current.material.uniformsNeedUpdate = true
 
@@ -150,30 +150,27 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
         name={`${props.name}-pointsTex`}
         ref={feedback}
         width={controlPointsCount}
-        height={1}
+        height={curveCount}
         uniforms={{
-          pointsTex: { value: pointsTex },
+          keyframesTex: { value: keyframesTex },
           progress: { value: 0 }
         }}
+        includes={
+          /*glsl*/ `
+          uniform sampler3D keyframesTex;
+          ${multiBezier2(keyframeCount)}
+        `
+        }
         fragmentShader={
           /*glsl*/ `
-          in vec2 vUv;
-          uniform sampler3D pointsTex;
-          uniform float progress;
-
-          ${multiBezier2(keyframeCount)}
-
-          void main() {
-
             vec2[${keyframeCount}] kfPoints;
             for (int j = 0; j < ${keyframeCount}; j ++) {
-              kfPoints[j] = texture(pointsTex, vec3(float(i) / ${controlPointsCount}., curveProgress, float(j) / ${
-            keyframeCount - 1
-          })).xy;
+              kfPoints[j] = texture(keyframesTex, vec3(vUv.x, vUv.y, float(j) / ${
+                keyframeCount - 1
+              }.)).xy;
             }
 
-            gl_FragColor = vec4(multiBezier2(progress, kfPoints, vec2(1, 1)).position, 1, 1);
-          }
+            return vec3(multiBezier2(progress, kfPoints, vec2(1, 1)).position, 1);
           `
         }
       />
@@ -206,7 +203,7 @@ struct Jitter {
 in vec2 pointInfo;
 
 uniform sampler2D pointsTex;
-uniform sampler2D colorTex;
+uniform sampler3D colorTex;
 uniform vec2 resolution;
 uniform vec2 size;
 uniform Jitter jitter;
@@ -229,7 +226,6 @@ void main() {
   vUv = uv;
 
   // u to T mapping...
-  float keyframeProgress = progress * keyframeCount;
   float curveProgress = pointInfo.y;
   float pointProgress = pointInfo.x;
 
@@ -248,24 +244,24 @@ void main() {
   vec2 thisPosition = point.position;
   float thisRotation = point.rotation;
   
+  vColor = texture(
+    colorTex, 
+    vec3(pointProgress, curveProgress, 0));
   float thisThickness = texture(
     pointsTex, 
     vec2(pointProgress, curveProgress)).z;
-  vColor = texture(
-    colorTex, 
-    vec2(pointProgress, curveProgress));
 
   vec2 jitterPosition = jitter.position * pixel
-    * (vec2(hash(thisPosition.x, .184 + progress), 
-      hash(thisPosition.y, .182 + progress)) - 0.5);
+    * (vec2(hash(thisPosition.x, .184), 
+      hash(thisPosition.y, .182)) - 0.5);
   vec2 jitterSize = 1. + jitter.size / size
-    * hash(thisPosition.x + thisPosition.y, .923 + progress);
+    * hash(thisPosition.x + thisPosition.y, .923);
   float jitterA = vColor.a 
     * (1. - (
-      hash(thisPosition.x + thisPosition.y, .294 + progress) 
+      hash(thisPosition.x + thisPosition.y, .294) 
       * jitter.a));
   float jitterRotation = jitter.rotation
-    * hash(thisPosition.x + thisPosition.y, .429 + progress)
+    * hash(thisPosition.x + thisPosition.y, .429)
     - (jitter.rotation / 2.);
 
   gl_Position = 
@@ -294,7 +290,7 @@ void main() {
   // if (discardPoint == 1.) discard;
   // if (length(vUv - 0.5) > 0.707 - 0.2) discard;
   // gl_FragColor = processColor(vColor, vUv);
-  gl_FragColor = processColor(vec4(v_test, 1, 1, 1), vUv);
+  gl_FragColor = processColor(vColor, vUv);
 }`
           }
         />

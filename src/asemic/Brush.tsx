@@ -17,7 +17,6 @@ type Vector3List = [number, number, number]
 export type BrushSettings = {
   spacing?: number
   size?: VectorList
-  alpha?: number
   jitter?: {
     size?: VectorList
     position?: VectorList
@@ -30,19 +29,20 @@ export type BrushSettings = {
   rotation?: number
   fragmentShader?: string
   vertexShader?: string
+  modifyPosition?: string
+  includes?: string
   between?: [number, number]
-  type?: '2d' | '3d'
   curveLengths: number[]
   controlPointsCount: number
   keyframeCount: number
   keyframesTex: THREE.Data3DTexture
   colorTex: THREE.Texture
+  loop?: boolean
 }
 
 export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
   let {
     spacing = 1,
-    alpha = 1,
     curveLengths,
     controlPointsCount = 3,
     keyframeCount = 1,
@@ -56,7 +56,9 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
     fragmentShader = /*glsl*/ `return color;`,
     vertexShader = /*glsl*/ `return position;`,
     between = [0, 1],
-    type = '2d'
+    loop = false,
+    modifyPosition,
+    includes
   } = props
   jitter = {
     size: [0, 0],
@@ -158,19 +160,42 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
         includes={
           /*glsl*/ `
           uniform sampler3D keyframesTex;
-          ${multiBezier2(keyframeCount)}
+          uniform float mixFactor;
+          ${loop ? `#define LOOP 1` : ''}
+
+          ${multiBezier2(loop ? keyframeCount + 2 : keyframeCount)}
+          ${includes ?? ''}
+          ${
+            modifyPosition
+              ? /*glsl*/ `
+          vec3 modifyPosition(vec3 lastPoint, vec3 thisPoint) {
+            ${modifyPosition}
+          }`
+              : ''
+          }
         `
         }
         fragmentShader={
           /*glsl*/ `
-            vec2[${keyframeCount}] kfPoints;
-            for (int j = 0; j < ${keyframeCount}; j ++) {
-              kfPoints[j] = texture(keyframesTex, vec3(vUv.x, vUv.y, float(j) / ${
-                keyframeCount - 1
-              }.)).xy;
-            }
+          // vec3 lastPoint passed in
+          vec2[${loop ? keyframeCount + 2 : keyframeCount}] kfPoints;
+          for (int j = 0; j < ${keyframeCount}; j ++) {
+            kfPoints[j] = texture(keyframesTex, vec3(vUv.x, vUv.y, float(j) / ${keyframeCount}.)).xy;
+          }
+          
+          #ifdef LOOP
+          kfPoints[${keyframeCount}] = texture(keyframesTex, vec3(vUv.x, vUv.y, 0.)).xy;
+          kfPoints[${
+            keyframeCount + 1
+          }] = texture(keyframesTex, vec3(vUv.x, vUv.y, 1. / ${keyframeCount}.)).xy;
+          #endif
 
-            return vec3(multiBezier2(progress, kfPoints, vec2(1, 1)).position, 1);
+          vec3 nextKeyframe = vec3(multiBezier2(progress, kfPoints, vec2(1, 1)).position, 1);
+          ${
+            modifyPosition
+              ? /*glsl*/ `return modifyPosition(lastPoint, nextKeyframe);`
+              : /*glsl*/ `return nextKeyframe;`
+          }
           `
         }
       />

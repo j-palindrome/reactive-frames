@@ -105,6 +105,7 @@ export function useKeyframes({
       tex.format = format
       tex.type = THREE.FloatType
       tex.minFilter = tex.magFilter = THREE.NearestFilter
+      tex.wrapR = tex.wrapS = tex.wrapT = THREE.RepeatWrapping
       tex.needsUpdate = true
       return tex
     }
@@ -136,15 +137,18 @@ export function useKeyframes({
 class PointVector extends Vector2 {
   curve: CurvePoint[]
   index: number
+  strength: number
 
   constructor(
     points: [number, number] = [0, 0],
+    strength: number = 0,
     curve: CurvePoint[],
     index: number
   ) {
     super(points[0], points[1])
     this.curve = curve
     this.index = index
+    this.strength = strength
   }
 
   twist(from: Vector2, amount: number) {
@@ -195,6 +199,7 @@ export class Keyframes {
   targetFrames: [number, number]
   targetCurves: [number, number]
   curveCount: number
+  pointCount: number
 
   then(frame?: Omit<KeyframeData, 'curves'>) {
     const newKeyframe = {
@@ -207,32 +212,21 @@ export class Keyframes {
   }
 
   constructor(curveCount: number, pointCount: number) {
-    this.keyframes = [
-      {
-        curves: range(curveCount).map(curveI => {
-          const thisCurve: CurvePoint[] = []
-          for (let i = 0; i < pointCount; i++) {
-            thisCurve.push({
-              position: new PointVector([0, 0], thisCurve, i),
-              pointProgress: i / (pointCount - 1 || 1),
-              curveProgress: curveI / (curveCount - 1 || 1)
-            })
-          }
-          return thisCurve
-        })
-      }
-    ]
-
+    this.keyframes = []
     this.targetCurves = [0, curveCount]
     this.targetFrames = [0, 0]
     this.curveCount = curveCount
+    this.pointCount = pointCount
+
+    this.add(0)
   }
 
-  debug() {
+  debug(start: number = 0, end: number = 1) {
     console.log(
       cloneDeep(this.keyframes)
         .map(x =>
           x.curves
+            .slice(start, end)
             .map(c =>
               c
                 .map(
@@ -255,6 +249,27 @@ export class Keyframes {
     if (keyframe < 0) keyframe += this.keyframes.length
     for (let i = 0; i < copyCount; i++) {
       this.keyframes.push(cloneDeep(this.keyframes[keyframe]))
+    }
+    this.targetFrames = [keyframe + 1, this.keyframes.length - 1]
+    return this
+  }
+
+  add(keyframe: number, addCount: number = 1) {
+    if (keyframe < 0) keyframe += this.keyframes.length
+    for (let i = 0; i < addCount; i++) {
+      this.keyframes.push({
+        curves: range(this.curveCount).map(curveI => {
+          const thisCurve: CurvePoint[] = []
+          for (let i = 0; i < this.pointCount; i++) {
+            thisCurve.push({
+              position: new PointVector([0, 0], 0, thisCurve, i),
+              pointProgress: i / (this.pointCount - 1 || 1),
+              curveProgress: curveI / (this.curveCount - 1 || 1)
+            })
+          }
+          return thisCurve
+        })
+      })
     }
     this.targetFrames = [keyframe + 1, this.keyframes.length - 1]
     return this

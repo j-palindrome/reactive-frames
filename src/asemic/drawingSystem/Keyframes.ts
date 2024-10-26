@@ -63,14 +63,13 @@ export class PointVector extends Vector2 {
 const vector = new Vector2()
 const vector2 = new Vector2()
 const vector3 = new Vector2()
-export class Keyframes extends THREE.Matrix3 {
+export class Keyframes {
   keyframes: KeyframeData[]
   private targetFrames: [number, number]
   private targetGroups: [number, number]
   curveCounts: number[]
 
   constructor(generate: ((g: GroupBuilder) => GroupBuilder)[]) {
-    super()
     const startCurves = generate.map(generate => generate(new GroupBuilder()))
     const totalCurves = sumBy(startCurves, x => x.curves.length)
     let curveI = 0

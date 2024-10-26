@@ -58,10 +58,11 @@ const CanvasComponent = forwardRef<HTMLCanvasElement, CanvasComponentProps>(
         {!props.hidden && (
           <canvas
             ref={innerRef}
-            className={props.className ?? 'h-full w-full'}
+            className={props.className}
             id={props.id}
             height={props.height}
-            width={props.width}></canvas>
+            width={props.width}
+            style={{ height: '100%', width: '100%' }}></canvas>
         )}
       </>
     )

@@ -33,14 +33,6 @@ export function useKeyframes(
 
     kf.forEach(keyframe => {
       keyframe.groups.flat().forEach((curve, j) => {
-        const bezier2 = (t: number, p0: Vector2, p1: Vector2, p2: Vector2) => {
-          const tInverse = 1 - t
-          return p0
-            .clone()
-            .multiplyScalar(tInverse ** 2)
-            .add(p1.clone().multiplyScalar(2 * tInverse * t))
-            .add(p2.clone().multiplyScalar(t * t))
-        }
         // interpolate the bezier curves which are too short
         if (curve.length < controlPointsCount) {
           let i = 0

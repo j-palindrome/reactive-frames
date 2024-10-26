@@ -23,7 +23,7 @@
   },
   "include": [
     "src/*",
-    "src/asemic/*",
+    "src/asemic/**/*",
     "src/asemic/drawingSystem/useKeyframes.tsx"
   ]
 }

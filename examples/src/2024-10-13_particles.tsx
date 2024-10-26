@@ -9,18 +9,19 @@ import { rotate2d } from '../../util/src/shaders/manipulation'
 import { Keyframes } from '../../src/asemic/drawingSystem/Keyframes'
 
 export default function ParticlesTest() {
-  const kf = new Keyframes([1, 3], 5)
-    .addFrame(0, 2)
-    .targetFrame(0, 2)
-    .targetGroup(0)
-    .eachPoint(p => {
-      p.position.random().multiplyScalar(0.5)
-    })
-    .targetGroup(1)
-    .eachPoint(p => {
-      p.position.random().multiplyScalar(0.5).add({ x: 0.5, y: 0.5 })
-    })
-    .debug()
+  const kf = new Keyframes([
+    g =>
+      g
+        .addCurve()
+        .moveTo([0.75, 0.75])
+        .warp(-0.35, [0.5, 0.8])
+        .arc(0.8)
+        .addCurve()
+        .moveToPoint(0, 0)
+        .move(-0.25, 0.5)
+        .warp(0, [0.5, 0.1])
+        .curve()
+  ])
   const keyframeInfo = useKeyframes(kf, {
     alpha: 1
   })

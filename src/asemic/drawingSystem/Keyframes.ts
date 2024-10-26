@@ -1,8 +1,9 @@
 import { Vector2 } from 'three'
-import { cloneDeep, last, max, range } from 'lodash'
+import { cloneDeep, last, max, range, sumBy } from 'lodash'
 import { useMemo } from 'react'
 import { lerp } from 'three/src/math/MathUtils.js'
 import * as THREE from 'three'
+import GroupBuilder from './GroupBuilder'
 
 const degree = 2
 const targetVector = new Vector2()
@@ -62,21 +63,32 @@ export class PointVector extends Vector2 {
 const vector = new Vector2()
 const vector2 = new Vector2()
 const vector3 = new Vector2()
-export class Keyframes {
+export class Keyframes extends THREE.Matrix3 {
   keyframes: KeyframeData[]
   private targetFrames: [number, number]
   private targetGroups: [number, number]
   curveCounts: number[]
-  pointCount: number
 
-  constructor(curveCounts: number[], pointCount: number) {
-    this.keyframes = []
-    this.targetGroups = [0, curveCounts.length]
+  constructor(generate: ((g: GroupBuilder) => GroupBuilder)[]) {
+    super()
+    const startCurves = generate.map(generate => generate(new GroupBuilder()))
+    const totalCurves = sumBy(startCurves, x => x.curves.length)
+    let curveI = 0
+    for (let group of startCurves) {
+      for (let curve of group.curves) {
+        let pointI = 0
+        for (let point of curve) {
+          point.curveProgress = curveI / totalCurves
+          point.pointProgress = pointI / (curve.length - 1)
+          pointI++
+        }
+        curveI++
+      }
+    }
+    this.keyframes = [{ groups: startCurves.map(x => x.curves) }]
+    this.targetGroups = [0, this.keyframes[0].groups.length]
     this.targetFrames = [0, 0]
-    this.curveCounts = curveCounts
-    this.pointCount = pointCount
-
-    this.addFrame(0)
+    this.curveCounts = this.keyframes[0].groups.map(x => x.length)
   }
 
   debug() {
@@ -112,30 +124,6 @@ export class Keyframes {
     if (keyframe < 0) keyframe += this.keyframes.length
     for (let i = 0; i < copyCount; i++) {
       this.keyframes.push(cloneDeep(this.keyframes[keyframe]))
-    }
-    this.targetFrames = [keyframe + 1, this.keyframes.length - 1]
-    return this
-  }
-
-  addFrame(keyframe: number, addCount: number = 1) {
-    if (keyframe < 0) keyframe += this.keyframes.length
-    for (let i = 0; i < addCount; i++) {
-      this.keyframes.push({
-        groups: this.curveCounts.map(curveCount =>
-          range(curveCount).map(curveI => {
-            const thisCurve: CurvePoint[] = []
-            for (let i = 0; i < this.pointCount; i++) {
-              thisCurve.push({
-                position: new PointVector([0, 0], 0, thisCurve, i),
-                pointProgress: i / (this.pointCount - 1 || 1),
-                curveProgress: curveI / (curveCount - 1 || 1),
-                strength: 0
-              })
-            }
-            return thisCurve
-          })
-        )
-      })
     }
     this.targetFrames = [keyframe + 1, this.keyframes.length - 1]
     return this

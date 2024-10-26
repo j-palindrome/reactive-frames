@@ -33,42 +33,55 @@ export function useKeyframes(
 
     kf.forEach(keyframe => {
       keyframe.groups.flat().forEach((curve, j) => {
+        const bezier2 = (t: number, p0: Vector2, p1: Vector2, p2: Vector2) => {
+          const tInverse = 1 - t
+          return p0
+            .clone()
+            .multiplyScalar(tInverse ** 2)
+            .add(p1.clone().multiplyScalar(2 * tInverse * t))
+            .add(p2.clone().multiplyScalar(t * t))
+        }
         // interpolate the bezier curves which are too short
         if (curve.length < controlPointsCount) {
           let i = 0
-          while (curve.length < controlPointsCount) {
-            curve.splice(i + 1, 0, {
-              position: curve[i].position
-                .clone()
-                .lerp(curve[i + 1].position, 0.5),
-              thickness: lerp(
-                curve[i].thickness ?? 1,
-                curve[i + 1].thickness ?? 1,
-                0.5
-              ),
-              alpha: lerp(curve[i].alpha ?? 1, curve[i + 1].alpha ?? 1, 0.5),
-              curveProgress: j / totalCurves,
-              pointProgress: i / (controlPointsCount - 1),
-              strength: 0
-            })
-            i += 2
-            if (i >= curve.length - 2) i -= curve.length - 2
+          const oldCurve = [...curve]
+          const newCurvePoints: CurvePoint[] = []
+          const newCurve = new THREE.CurvePath<Vector2>()
+          for (let i = 0; i < oldCurve.length - 2; i++) {
+            newCurve.add(
+              new THREE.QuadraticBezierCurve(
+                oldCurve[i].position,
+                oldCurve[i + 1].position,
+                oldCurve[i + 2].position
+              )
+            )
           }
+          for (let i = 0; i < controlPointsCount; i++) {
+            const u = i / (controlPointsCount - 1)
+            newCurvePoints.push({
+              position: newCurve.getPointAt(u),
+              strength: 0,
+              curveProgress: 0,
+              pointProgress: 0
+            })
+          }
+          newCurvePoints.forEach((point, i) => {
+            point.pointProgress = i / (curve.length - 1)
+          })
+          curve.splice(0, curve.length, ...newCurvePoints)
         }
 
         const curvePath = new THREE.CurvePath()
         const segments: THREE.Curve<Vector2>[] = []
         range(subdivisions).forEach(i => {
           const thisCurve = new THREE.QuadraticBezierCurve(
-            // i === 0
-            //   ? curve[i].position
-            //   :
-            curve[i].position.clone().lerp(curve[i + 1].position, 0.5),
+            i === 0
+              ? curve[i].position
+              : curve[i].position.clone().lerp(curve[i + 1].position, 0.5),
             curve[i + 1].position,
-            // i === subdivisions - 1
-            //   ? curve[i + 2].position
-            //   :
-            curve[i + 1].position.clone().lerp(curve[i + 2].position, 0.5)
+            i === subdivisions - 1
+              ? curve[i + 2].position
+              : curve[i + 1].position.clone().lerp(curve[i + 2].position, 0.5)
           )
           curvePath.add(thisCurve)
           segments.push(thisCurve)

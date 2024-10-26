@@ -163,7 +163,9 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
           uniform float mixFactor;
           ${loop ? `#define LOOP 1` : ''}
 
-          ${multiBezier2(loop ? keyframeCount + 2 : keyframeCount)}
+          ${multiBezier2(loop ? keyframeCount + 2 : keyframeCount, {
+            endPoints: loop ? false : true
+          })}
           ${includes ?? ''}
           ${
             modifyPosition

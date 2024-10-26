@@ -7,6 +7,7 @@ declare global {
     thickness?: number
     alpha?: number
     color?: Color
+    strength: number
     curveProgress: number
     pointProgress: number
   }

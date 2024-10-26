@@ -9,11 +9,14 @@ import { rotate2d } from '../../util/src/shaders/manipulation'
 
 export default function ParticlesTest() {
   const keyframeInfo = useKeyframes({
-    keyframes: new Keyframes(200, 5)
+    keyframes: new Keyframes(1, 5)
       .add(0, 2)
       .target(0, 2)
-      .eachPoint(p => p.position.randomize().addScalar(0.5)).keyframes,
-    alpha: 0.1
+      .eachPoint(p => {
+        p.position.randomize().addScalar(0.5)
+        p.strength = Math.random()
+      }).keyframes,
+    alpha: 1
   })
   return (
     <Reactive progress={t => (t / 2) % 1}>

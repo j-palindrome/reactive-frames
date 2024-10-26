@@ -44,7 +44,8 @@ export function useKeyframes({
               ),
               alpha: lerp(curve[i].alpha ?? 1, curve[i + 1].alpha ?? 1, 0.5),
               curveProgress: j / keyframe.curves.length,
-              pointProgress: i / (controlPointsCount - 1)
+              pointProgress: i / (controlPointsCount - 1),
+              strength: 0
             })
             i += 2
             if (i >= curve.length - 2) i -= curve.length - 2
@@ -111,7 +112,7 @@ export function useKeyframes({
     }
 
     const keyframesTex = createTexture(point => {
-      return [...point.position.toArray(), point.thickness ?? 1, 0]
+      return [...point.position.toArray(), point.strength, 1]
     }, THREE.RGBAFormat)
 
     const colorTex = createTexture(
@@ -137,7 +138,6 @@ export function useKeyframes({
 class PointVector extends Vector2 {
   curve: CurvePoint[]
   index: number
-  strength: number
 
   constructor(
     points: [number, number] = [0, 0],
@@ -148,7 +148,6 @@ class PointVector extends Vector2 {
     super(points[0], points[1])
     this.curve = curve
     this.index = index
-    this.strength = strength
   }
 
   twist(from: Vector2, amount: number) {
@@ -264,7 +263,8 @@ export class Keyframes {
             thisCurve.push({
               position: new PointVector([0, 0], 0, thisCurve, i),
               pointProgress: i / (this.pointCount - 1 || 1),
-              curveProgress: curveI / (this.curveCount - 1 || 1)
+              curveProgress: curveI / (this.curveCount - 1 || 1),
+              strength: 0
             })
           }
           return thisCurve

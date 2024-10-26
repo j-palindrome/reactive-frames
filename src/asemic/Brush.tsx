@@ -177,25 +177,28 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
         }
         fragmentShader={
           /*glsl*/ `
-          // vec3 lastPoint passed in
-          vec2[${loop ? keyframeCount + 2 : keyframeCount}] kfPoints;
-          for (int j = 0; j < ${keyframeCount}; j ++) {
-            kfPoints[j] = texture(keyframesTex, vec3(vUv.x, vUv.y, float(j) / ${keyframeCount}.)).xy;
-          }
-          
-          #ifdef LOOP
-          kfPoints[${keyframeCount}] = texture(keyframesTex, vec3(vUv.x, vUv.y, 0.)).xy;
-          kfPoints[${
-            keyframeCount + 1
-          }] = texture(keyframesTex, vec3(vUv.x, vUv.y, 1. / ${keyframeCount}.)).xy;
-          #endif
+float kfCount = ${keyframeCount}.;
+// vec3 lastPoint passed in
+vec3[${loop ? keyframeCount + 2 : keyframeCount}] kfPoints;
+for (int j = 0; j < ${keyframeCount}; j ++) {
+  kfPoints[j] = vec3(texture(keyframesTex, vec3(vUv.x, vUv.y, float(j) / ${keyframeCount}.)).xy, 0);
+}
 
-          vec3 nextKeyframe = vec3(multiBezier2(progress, kfPoints, vec2(1, 1)).position, 1);
-          ${
-            modifyPosition
-              ? /*glsl*/ `return modifyPosition(lastPoint, nextKeyframe);`
-              : /*glsl*/ `return nextKeyframe;`
-          }
+#ifdef LOOP
+kfPoints[${keyframeCount}] = vec3(texture(keyframesTex, vec3(vUv.x, vUv.y, 0.)).xy, 0);
+kfPoints[${
+            keyframeCount + 1
+          }] = vec3(texture(keyframesTex, vec3(vUv.x, vUv.y, 1. / kfCount)).xy, 0);
+#endif
+
+float thisStrength = mix(texture(keyframesTex, vec3(vUv.x, vUv.y, floor(progress * kfCount) / kfCount)).z, texture(keyframesTex, vec3(vUv.x, vUv.y, ceil(progress * kfCount) / kfCount)).z, fract(progress * kfCount));
+
+vec3 nextKeyframe = vec3(multiBezier2(progress, kfPoints, vec2(1, 1)).position, thisStrength);
+${
+  modifyPosition
+    ? /*glsl*/ `return modifyPosition(lastPoint, nextKeyframe);`
+    : /*glsl*/ `return nextKeyframe;`
+}
           `
         }
       />
@@ -254,13 +257,13 @@ void main() {
   float curveProgress = pointInfo.y;
   float pointProgress = pointInfo.x;
 
-  vec2[${controlPointsCount}] points = vec2[${controlPointsCount}](
+  vec3[${controlPointsCount}] points = vec3[${controlPointsCount}](
     ${range(controlPointsCount)
       .map(
         i =>
           /*glsl*/ `texture(pointsTex, vec2(${i}. / ${
             controlPointsCount - 1
-          }., curveProgress)).xy`
+          }., curveProgress)).xyz`
       )
       .join(', ')}
   );
@@ -272,9 +275,10 @@ void main() {
   vColor = texture(
     colorTex, 
     vec3(pointProgress, curveProgress, 0));
-  float thisThickness = texture(
-    pointsTex, 
-    vec2(pointProgress, curveProgress)).z;
+  // float thisThickness = texture(
+  //   pointsTex, 
+  //   vec2(pointProgress, curveProgress)).z;
+  float thisThickness = 1.;
 
   vec2 jitterPosition = jitter.position * pixel
     * (vec2(hash(thisPosition.x, .184), 

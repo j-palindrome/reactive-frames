@@ -1,7 +1,9 @@
 import { Color, Vector2 } from 'three'
-import { PointVector } from './Keyframes'
+import { PointVector } from './useKeyframes'
 
 declare global {
+  type Coordinate = [number, number]
+
   type CurvePoint = {
     position: PointVector
     thickness?: number
@@ -13,7 +15,7 @@ declare global {
   }
 
   type KeyframeData = {
-    curves: CurvePoint[][]
+    groups: CurvePoint[][][]
     position?: Vector2
     scale?: Vector2
     rotation?: number

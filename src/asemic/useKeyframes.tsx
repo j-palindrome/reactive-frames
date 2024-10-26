@@ -7,28 +7,31 @@ import * as THREE from 'three'
 const degree = 2
 const targetVector = new Vector2()
 
-export function useKeyframes({
-  keyframes,
-  color = new THREE.Color(1, 1, 1),
-  alpha = 1
-}: {
-  keyframes: Keyframes['keyframes']
-  color?: THREE.Color
-  alpha?: number
-}) {
-  const keyframeCount = keyframes.length
-  const curveCount = keyframes[0].curves.length
+export function useKeyframes(
+  keyframes: Keyframes,
+  {
+    color = new THREE.Color(1, 1, 1),
+    alpha = 1
+  }: {
+    color?: THREE.Color
+    alpha?: number
+  }
+) {
+  const kf = keyframes.keyframes
+  const keyframeCount = kf.length
+  const curveCount = kf[0].groups.flat().length
 
   const controlPointsCount = max(
-    keyframes.flatMap(x => x.curves).map(x => x.length)
+    kf.flatMap(x => x.groups.flat()).map(x => x.length)
   )!
 
   const subdivisions = (controlPointsCount - degree) / (degree - 1)
   const curveLengths = useMemo(() => {
-    const curveLengths = range(keyframes[0].curves.length).flatMap(() => 0)
+    const totalCurves = kf[0].groups.flat().length
+    const curveLengths = range(totalCurves).flatMap(() => 0)
 
-    keyframes.forEach(keyframe => {
-      return keyframe.curves.map((curve, j) => {
+    kf.forEach(keyframe => {
+      keyframe.groups.flat().forEach((curve, j) => {
         // interpolate the bezier curves which are too short
         if (curve.length < controlPointsCount) {
           let i = 0
@@ -43,7 +46,7 @@ export function useKeyframes({
                 0.5
               ),
               alpha: lerp(curve[i].alpha ?? 1, curve[i + 1].alpha ?? 1, 0.5),
-              curveProgress: j / keyframe.curves.length,
+              curveProgress: j / totalCurves,
               pointProgress: i / (controlPointsCount - 1),
               strength: 0
             })
@@ -81,19 +84,20 @@ export function useKeyframes({
 
   // write keyframes to 3D data texture.
   // read them into the shaders.
-
   const { keyframesTex, colorTex } = useMemo(() => {
     const createTexture = (
       getPoint: (point: CurvePoint) => number[],
       format: THREE.AnyPixelFormat
     ) => {
       const array = new Float32Array(
-        keyframes.flatMap(keyframe => {
-          return keyframe.curves.flatMap(curve => {
-            return curve.flatMap(point => {
-              return getPoint(point)
+        kf.flatMap(keyframe => {
+          return keyframe.groups.flatMap(group =>
+            group.flatMap(curve => {
+              return curve.flatMap(point => {
+                return getPoint(point)
+              })
             })
-          })
+          )
         })
       )
 
@@ -123,19 +127,18 @@ export function useKeyframes({
       THREE.RGBAFormat
     )
     return { keyframesTex, colorTex }
-  }, [keyframes])
+  }, [kf])
 
   return {
     curveLengths,
     keyframesTex,
     colorTex,
     controlPointsCount,
-    keyframeCount,
-    type: '3d' as '3d'
+    keyframeCount
   }
 }
 
-class PointVector extends Vector2 {
+export class PointVector extends Vector2 {
   curve: CurvePoint[]
   index: number
 
@@ -150,18 +153,22 @@ class PointVector extends Vector2 {
     this.index = index
   }
 
-  twist(from: Vector2, amount: number) {
-    this.rotateAround(from, amount * Math.PI * 2)
+  twist(from: Coordinate, amount: number) {
+    this.rotateAround(vector.set(...from), amount * Math.PI * 2)
     return this
   }
 
-  pull(from: Vector2, to: Vector2, amount: number) {
-    this.sub(from).lerp(to, amount).add(from)
+  pull(from: Coordinate, to: Coordinate, amount: number) {
+    this.sub(vector.set(...from))
+      .lerp(vector2.set(...to), amount)
+      .add(vector)
     return this
   }
 
-  stretch(from: Vector2, amount: Vector2) {
-    this.sub(from).multiply(amount).add(from)
+  stretch(from: Coordinate, to: Coordinate) {
+    this.sub(vector.set(...from))
+      .multiply(vector2.set(...to).sub(vector))
+      .add(vector)
     return this
   }
 
@@ -193,58 +200,55 @@ class PointVector extends Vector2 {
 }
 
 const vector = new Vector2()
+const vector2 = new Vector2()
+const vector3 = new Vector2()
 export class Keyframes {
   keyframes: KeyframeData[]
-  targetFrames: [number, number]
-  targetCurves: [number, number]
-  curveCount: number
+  private targetFrames: [number, number]
+  private targetGroups: [number, number]
+  curveCounts: number[]
   pointCount: number
 
-  then(frame?: Omit<KeyframeData, 'curves'>) {
-    const newKeyframe = {
-      ...cloneDeep(last(this.keyframes)),
-      ...frame
-    } as KeyframeData
-    this.keyframes.push(newKeyframe)
-    this.target(-1)
-    return this
-  }
-
-  constructor(curveCount: number, pointCount: number) {
+  constructor(curveCounts: number[], pointCount: number) {
     this.keyframes = []
-    this.targetCurves = [0, curveCount]
+    this.targetGroups = [0, curveCounts.length]
     this.targetFrames = [0, 0]
-    this.curveCount = curveCount
+    this.curveCounts = curveCounts
     this.pointCount = pointCount
 
-    this.add(0)
+    this.addFrame(0)
   }
 
-  debug(start: number = 0, end: number = 1) {
+  debug() {
     console.log(
       cloneDeep(this.keyframes)
+        .slice(this.targetFrames[0], this.targetFrames[1] + 1)
         .map(x =>
-          x.curves
-            .slice(start, end)
-            .map(c =>
-              c
-                .map(
-                  p =>
-                    `${p.position
-                      .toArray()
-                      .map(p => Math.floor(p * 100))
-                      .join(',')}`
+          x.groups
+            .slice(this.targetGroups[0], this.targetGroups[1] + 1)
+            .map(g =>
+              g
+                .map(c =>
+                  c
+                    .map(
+                      p =>
+                        `${p.position
+                          .toArray()
+                          .map(p => Math.floor(p * 100))
+                          .join(',')}`
+                    )
+                    .join(' ')
                 )
-                .join(' ')
+                .join('\n')
             )
-            .join('\n')
+            .join('\n\n')
         )
         .join('\n\n')
     )
     return this
   }
 
-  copy(keyframe: number, copyCount: number = 1) {
+  copyFrame(keyframe: number, copyCount: number = 1) {
     if (keyframe < 0) keyframe += this.keyframes.length
     for (let i = 0; i < copyCount; i++) {
       this.keyframes.push(cloneDeep(this.keyframes[keyframe]))
@@ -253,35 +257,40 @@ export class Keyframes {
     return this
   }
 
-  add(keyframe: number, addCount: number = 1) {
+  addFrame(keyframe: number, addCount: number = 1) {
     if (keyframe < 0) keyframe += this.keyframes.length
     for (let i = 0; i < addCount; i++) {
       this.keyframes.push({
-        curves: range(this.curveCount).map(curveI => {
-          const thisCurve: CurvePoint[] = []
-          for (let i = 0; i < this.pointCount; i++) {
-            thisCurve.push({
-              position: new PointVector([0, 0], 0, thisCurve, i),
-              pointProgress: i / (this.pointCount - 1 || 1),
-              curveProgress: curveI / (this.curveCount - 1 || 1),
-              strength: 0
-            })
-          }
-          return thisCurve
-        })
+        groups: this.curveCounts.map(curveCount =>
+          range(curveCount).map(curveI => {
+            const thisCurve: CurvePoint[] = []
+            for (let i = 0; i < this.pointCount; i++) {
+              thisCurve.push({
+                position: new PointVector([0, 0], 0, thisCurve, i),
+                pointProgress: i / (this.pointCount - 1 || 1),
+                curveProgress: curveI / (curveCount - 1 || 1),
+                strength: 0
+              })
+            }
+            return thisCurve
+          })
+        )
       })
     }
     this.targetFrames = [keyframe + 1, this.keyframes.length - 1]
     return this
   }
 
-  interpolate(keyframe: number, amount = 0.5) {
+  interpolateFrame(keyframe: number, amount = 0.5) {
     const interpKeyframe = cloneDeep(this.keyframes[keyframe])
-    interpKeyframe.curves.forEach((x, curveI) =>
-      x.forEach((point, pointI) =>
-        point.position.lerp(
-          this.keyframes[keyframe + 1].curves[curveI][pointI].position,
-          amount
+    interpKeyframe.groups.forEach((group, groupI) =>
+      group.forEach((x, curveI) =>
+        x.forEach((point, pointI) =>
+          point.position.lerp(
+            this.keyframes[keyframe + 1].groups[groupI][curveI][pointI]
+              .position,
+            amount
+          )
         )
       )
     )
@@ -289,7 +298,7 @@ export class Keyframes {
     return this
   }
 
-  target(from: number, to?: number) {
+  targetFrame(from: number, to?: number) {
     if (from < 0) from += this.keyframes.length
     if (to === undefined) to = from
     else if (to < 0) to += this.keyframes.length
@@ -297,16 +306,11 @@ export class Keyframes {
     return this
   }
 
-  set(setCurve: [number, number][]) {
-    this.eachFrame(frame => {
-      for (let i = this.targetCurves[0]; i < this.targetCurves[1]; i++) {
-        const curve = frame.curves[i]
-        curve.forEach((point, i) => {
-          point.position.set(setCurve[i][0], setCurve[i][1])
-        })
-      }
-    })
-
+  targetGroup(from: number, to?: number) {
+    if (from < 0) from += this.curveCounts.length
+    if (to === undefined) to = from
+    else if (to < 0) to += this.curveCounts.length
+    this.targetGroups = [from, to]
     return this
   }
 
@@ -317,23 +321,19 @@ export class Keyframes {
     return this
   }
 
-  eachCurve(callback: (curve: CurvePoint[]) => void) {
+  eachGroup(callback: (curve: CurvePoint[]) => void) {
     return this.eachFrame(frame => {
-      for (let i = this.targetCurves[0]; i < this.targetCurves[1]; i++) {
-        const curve = frame.curves[i]
-        callback(curve)
+      for (let i = this.targetGroups[0]; i <= this.targetGroups[1]; i++) {
+        for (let curve of frame.groups[i]) {
+          callback(curve)
+        }
       }
     })
   }
 
   eachPoint(callback: (point: CurvePoint) => void) {
-    return this.eachFrame(frame => {
-      for (let i = this.targetCurves[0]; i < this.targetCurves[1]; i++) {
-        const curve = frame.curves[i]
-        curve.forEach((point, i) => {
-          callback(point)
-        })
-      }
+    return this.eachGroup(curve => {
+      curve.forEach(point => callback(point))
     })
   }
 }

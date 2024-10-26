@@ -8,16 +8,22 @@ import { groupArrayBy } from '../../util/src/three'
 import { rotate2d } from '../../util/src/shaders/manipulation'
 
 export default function ParticlesTest() {
-  const keyframeInfo = useKeyframes({
-    keyframes: new Keyframes(1, 5)
-      .add(0, 2)
-      .target(0, 2)
-      .eachPoint(p => {
-        p.position.randomize().addScalar(0.5)
-        p.strength = Math.random()
-      }).keyframes,
+  const kf = new Keyframes([1, 3], 5)
+    .addFrame(0, 2)
+    .targetFrame(0, 2)
+    .targetGroup(0)
+    .eachPoint(p => {
+      p.position.random().multiplyScalar(0.5)
+    })
+    .targetGroup(1)
+    .eachPoint(p => {
+      p.position.random().multiplyScalar(0.5).add({ x: 0.5, y: 0.5 })
+    })
+    .debug()
+  const keyframeInfo = useKeyframes(kf, {
     alpha: 1
   })
+
   return (
     <Reactive progress={t => (t / 2) % 1}>
       <Asemic name='a'>

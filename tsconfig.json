@@ -21,5 +21,9 @@
       "@/*": ["./*"]
     }
   },
-  "include": ["src/*", "src/asemic/*"]
+  "include": [
+    "src/*",
+    "src/asemic/*",
+    "src/asemic/drawingSystem/useKeyframes.tsx"
+  ]
 }

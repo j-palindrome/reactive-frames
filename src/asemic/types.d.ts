@@ -1,5 +1,5 @@
 import { Color, Vector2 } from 'three'
-import { PointVector } from './useKeyframes'
+import { PointVector } from './drawingSystem/useKeyframes'
 
 declare global {
   type Coordinate = [number, number]

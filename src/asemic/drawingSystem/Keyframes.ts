@@ -1,64 +1,7 @@
+import { cloneDeep, sumBy } from 'lodash'
 import { Vector2 } from 'three'
-import { cloneDeep, last, max, range, sumBy } from 'lodash'
-import { useMemo } from 'react'
-import { lerp } from 'three/src/math/MathUtils.js'
-import * as THREE from 'three'
 import GroupBuilder from './GroupBuilder'
-
-const degree = 2
-const targetVector = new Vector2()
-
-export class PointVector extends Vector2 {
-  curve: CurvePoint[]
-  index: number
-
-  constructor(
-    points: [number, number] = [0, 0],
-    strength: number = 0,
-    curve: CurvePoint[],
-    index: number
-  ) {
-    super(points[0], points[1])
-    this.curve = curve
-    this.index = index
-  }
-
-  twist(from: Coordinate, amount: number) {
-    this.rotateAround(vector.set(...from), amount * Math.PI * 2)
-    return this
-  }
-
-  pull(from: Coordinate, to: Coordinate, amount: number) {
-    this.sub(vector.set(...from))
-      .lerp(vector2.set(...to), amount)
-      .add(vector)
-    return this
-  }
-
-  stretch(from: Coordinate, to: Coordinate) {
-    this.sub(vector.set(...from))
-      .multiply(vector2.set(...to).sub(vector))
-      .add(vector)
-    return this
-  }
-
-  randomize(amount: [number, number] = [1, 1]) {
-    const v = new Vector2(...amount)
-    const ang =
-      (this.index
-        ? this.curve[this.index - 1].position.angleTo(this)
-        : this.angleTo(this.curve[1].position)) +
-      0.5 * Math.PI * 2
-    this.add(
-      vector
-        .random()
-        .subScalar(0.5)
-        .multiply(v)
-        .rotateAround({ x: 0, y: 0 }, ang)
-    )
-    return this
-  }
-}
+import { PointVector } from './PointVector'
 
 const vector = new Vector2()
 const vector2 = new Vector2()
@@ -71,19 +14,6 @@ export class Keyframes {
 
   constructor(generate: ((g: GroupBuilder) => GroupBuilder)[]) {
     const startCurves = generate.map(generate => generate(new GroupBuilder()))
-    const totalCurves = sumBy(startCurves, x => x.curves.length)
-    let curveI = 0
-    for (let group of startCurves) {
-      for (let curve of group.curves) {
-        let pointI = 0
-        for (let point of curve) {
-          point.curveProgress = curveI / totalCurves
-          point.pointProgress = pointI / (curve.length - 1)
-          pointI++
-        }
-        curveI++
-      }
-    }
     this.keyframes = [{ groups: startCurves.map(x => x.curves) }]
     this.targetGroups = [0, this.keyframes[0].groups.length]
     this.targetFrames = [0, 0]
@@ -168,7 +98,7 @@ export class Keyframes {
     return this
   }
 
-  eachGroup(callback: (curve: CurvePoint[]) => void) {
+  eachGroup(callback: (curve: PointVector[]) => void) {
     return this.eachFrame(frame => {
       for (let i = this.targetGroups[0]; i <= this.targetGroups[1]; i++) {
         for (let curve of frame.groups[i]) {
@@ -178,7 +108,7 @@ export class Keyframes {
     })
   }
 
-  eachPoint(callback: (point: CurvePoint) => void) {
+  eachPoint(callback: (point: PointVector) => void) {
     return this.eachGroup(curve => {
       curve.forEach(point => callback(point))
     })

@@ -1,9 +1,9 @@
-import { Vector2 } from 'three'
-import { cloneDeep, last, max, range } from 'lodash'
+import { max, range } from 'lodash'
 import { useMemo } from 'react'
-import { lerp } from 'three/src/math/MathUtils.js'
 import * as THREE from 'three'
+import { Vector2 } from 'three'
 import { Keyframes } from './Keyframes'
+import { PointVector } from './PointVector'
 
 const degree = 2
 const targetVector = new Vector2()
@@ -37,29 +37,23 @@ export function useKeyframes(
         if (curve.length < controlPointsCount) {
           let i = 0
           const oldCurve = [...curve]
-          const newCurvePoints: CurvePoint[] = []
+          const newCurvePoints: PointVector[] = []
           const newCurve = new THREE.CurvePath<Vector2>()
           for (let i = 0; i < oldCurve.length - 2; i++) {
             newCurve.add(
               new THREE.QuadraticBezierCurve(
-                oldCurve[i].position,
-                oldCurve[i + 1].position,
-                oldCurve[i + 2].position
+                oldCurve[i],
+                oldCurve[i + 1],
+                oldCurve[i + 2]
               )
             )
           }
           for (let i = 0; i < controlPointsCount; i++) {
             const u = i / (controlPointsCount - 1)
-            newCurvePoints.push({
-              position: newCurve.getPointAt(u),
-              strength: 0,
-              curveProgress: 0,
-              pointProgress: 0
-            })
+            newCurvePoints.push(
+              new PointVector(newCurve.getPointAt(u).toArray(), curve, i)
+            )
           }
-          newCurvePoints.forEach((point, i) => {
-            point.pointProgress = i / (curve.length - 1)
-          })
           curve.splice(0, curve.length, ...newCurvePoints)
         }
 
@@ -67,13 +61,11 @@ export function useKeyframes(
         const segments: THREE.Curve<Vector2>[] = []
         range(subdivisions).forEach(i => {
           const thisCurve = new THREE.QuadraticBezierCurve(
-            i === 0
-              ? curve[i].position
-              : curve[i].position.clone().lerp(curve[i + 1].position, 0.5),
-            curve[i + 1].position,
+            i === 0 ? curve[i] : curve[i].clone().lerp(curve[i + 1], 0.5),
+            curve[i + 1],
             i === subdivisions - 1
-              ? curve[i + 2].position
-              : curve[i + 1].position.clone().lerp(curve[i + 2].position, 0.5)
+              ? curve[i + 2]
+              : curve[i + 1].clone().lerp(curve[i + 2], 0.5)
           )
           curvePath.add(thisCurve)
           segments.push(thisCurve)
@@ -92,7 +84,7 @@ export function useKeyframes(
   // read them into the shaders.
   const { keyframesTex, colorTex } = useMemo(() => {
     const createTexture = (
-      getPoint: (point: CurvePoint) => number[],
+      getPoint: (point: PointVector) => number[],
       format: THREE.AnyPixelFormat
     ) => {
       const array = new Float32Array(
@@ -122,14 +114,11 @@ export function useKeyframes(
     }
 
     const keyframesTex = createTexture(point => {
-      return [...point.position.toArray(), point.strength, 1]
+      return [...point.toArray(), point.strength, 1]
     }, THREE.RGBAFormat)
 
     const colorTex = createTexture(
-      point => [
-        ...(point.color?.toArray() ?? color.toArray()),
-        point.alpha ?? alpha
-      ],
+      point => [...(point.color ?? color.toArray()), point.alpha ?? alpha],
       THREE.RGBAFormat
     )
     return { keyframesTex, colorTex }

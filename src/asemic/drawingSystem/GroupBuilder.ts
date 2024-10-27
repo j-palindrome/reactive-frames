@@ -1,34 +1,15 @@
-import { Vector } from 'p5'
-import {
-  Matrix,
-  Matrix3,
-  QuadraticBezier,
-  QuadraticBezierCurve,
-  Vector2
-} from 'three'
-import { PointVector } from './Keyframes'
-import { last, max, maxBy, min, minBy } from 'lodash'
-import { bezier2JS } from '../../../util/src/geometry'
+import { last } from 'lodash'
+import * as THREE from 'three'
+import { Vector2 } from 'three'
+import { PointVector } from './PointVector'
 
-const vector = new Vector2()
-const vector2 = new Vector2()
 export default class GroupBuilder {
   targetCurves: [number, number]
-  curves: CurvePoint[][]
-
-  translation: Vector2
-  rotation: number
-  scaling: Vector2
-
-  firstPoint?: CurvePoint
-  lastPoint?: CurvePoint
+  curves: PointVector[][]
 
   constructor() {
     this.curves = []
     this.targetCurves = [0, 0]
-    this.translation = new Vector2(0, 0)
-    this.rotation = 0
-    this.scaling = new Vector2(1, 1)
   }
 
   targetCurve(from: number, to?: number) {
@@ -39,7 +20,7 @@ export default class GroupBuilder {
     return this
   }
 
-  eachCurve(callback: (curve: CurvePoint[]) => void) {
+  eachCurve(callback: (curve: PointVector[]) => void) {
     for (let i = this.targetCurves[0]; i <= this.targetCurves[1]; i++) {
       callback(this.curves[i])
     }
@@ -49,7 +30,7 @@ export default class GroupBuilder {
   debug() {
     console.log(
       this.curves[this.targetCurves[0]].map(x =>
-        x.position
+        x
           .toArray()
           .map(x => x.toFixed(2))
           .join(', ')
@@ -58,111 +39,90 @@ export default class GroupBuilder {
     return this
   }
 
-  // moveToPoint(
-  //   curveIndex: number,
-  //   pointIndex: number,
-  //   offset: Coordinate = [0, 0]
-  // ) {
-  //   if (curveIndex < 0) curveIndex += this.curves.length
-  //   if (pointIndex < 0) pointIndex += this.curves[curveIndex].length
-  //   this.moveTo(this.curves[curveIndex][pointIndex].position)
-  //   this.move(...offset)
-  //   return this
-  // }
-
-  // moveTo(point: Coordinate) {
-  //   this.translation.copy(vector.set(...point))
-  //   this.updateMatrix()
-  //   return this
-  // }
-
-  // moveBy(point: Coordinate) {
-  //   this.translation.add(vector.set(...point))
-  //   this.updateMatrix()
-  //   return this
-  // }
-
-  // move(rotation: number, length: number) {
-  //   this.translation.add(
-  //     vector
-  //       .set(0, length)
-  //       .rotateAround({ x: 0, y: 0 }, -rotation * Math.PI * 2)
-  //   )
-  //   this.updateMatrix()
-  //   return this
-  // }
-
-  private curveFromPoints(points: Coordinate[]): CurvePoint[] {
-    return points.map(point => ({
-      position: new Vector2(...point),
-      strength: 0,
-      curveProgress: 0,
-      pointProgress: 0
-    }))
-  }
-
-  new(origin: Coordinate) {
-    this.curves.push(this.curveFromPoints([origin]))
-    this.targetCurve(-1)
+  private addToCurve(curve: PointVector[], points: Coordinate[]) {
+    curve.push(
+      ...points.map(
+        (point, i) => new PointVector(point, curve, i + curve.length)
+      )
+    )
     return this
   }
 
-  curve(endPoint: Coordinate, height: number) {
-    return this.eachCurve(curve => {
-      const points = [new Vector2(0.5, 1), new Vector2(1, 0)]
+  new(origin: Coordinate) {
+    this.curves.push([])
+    this.targetCurve(-1)
+    this.addToCurve(this.curves[this.targetCurves[0]], [origin])
+    return this
+  }
 
-      const lastPoint = last(curve)!.position
+  curve(endPoint: Coordinate, height: number, skew: number = 0.5) {
+    return this.eachCurve(curve => {
+      const points = [new Vector2(skew, 1), new Vector2(1, 0)]
+
+      const lastPoint = last(curve)!
       const scale = new Vector2(...endPoint).distanceTo(lastPoint)
       const rotate = new Vector2(...endPoint).sub(lastPoint).angle()
 
-      curve.push(
-        ...this.curveFromPoints(
-          points.map(point =>
-            point
-              .clone()
-              .multiply({ x: scale, y: height })
-              .add(lastPoint)
-              .rotateAround(lastPoint, rotate)
-              .toArray()
-          )
+      this.addToCurve(
+        curve,
+        points.map(point =>
+          point
+            .clone()
+            .multiply({ x: scale, y: height })
+            .add(lastPoint)
+            .rotateAround(lastPoint, rotate)
+            .toArray()
         )
       )
     })
   }
 
-  point(coord: Coordinate) {
-    return this.eachCurve(curve => curve.push(...this.curveFromPoints([coord])))
+  private makeCurvePath(curve: PointVector[]) {
+    const path = new THREE.CurvePath()
+    for (let i = 0; i < curve.length - 2; i++) {
+      path.add(
+        new THREE.QuadraticBezierCurve(
+          i === 0 ? curve[i] : curve[i].clone().lerp(curve[i + 1], 0.5),
+          curve[i + 1],
+          i === curve.length - 3
+            ? curve[i + 2]
+            : curve[i + 1].clone().lerp(curve[i + 2], 0.5)
+        )
+      )
+    }
+    return path
   }
 
-  // resetWarp() {
-  //   this.rotation = 0
-  //   this.scaling.set(1, 1)
-  //   this.translation.set(0, 0)
-  //   this.updateMatrix()
-  //   return this
-  // }
+  /**
+   * Slide the curve along itself to offset its start point.
+   */
+  slide(amount: number) {
+    return this.eachCurve(curve => {
+      const path = this.makeCurvePath(curve)
 
-  // warp(r: number = this.rotation, to: Coordinate = [1, 1]) {
-  //   this.rotation = r * Math.PI * 2
-  //   this.scaling.copy(vector.set(...to))
-  //   this.updateMatrix()
-  //   return this
-  // }
+      const offset = curve[0].clone().sub(path.getPointAt(amount))
+      console.log(offset, curve[0].clone(), path.getPointAt(amount))
+
+      curve.forEach(point => point.add(offset))
+    })
+  }
+
+  point(coord: Coordinate) {
+    return this.eachCurve(curve => this.addToCurve(curve, [coord]))
+  }
 
   letter(type: keyof GroupBuilder['letters']) {
     return this.letters[type]()
   }
 
-  // private updateMatrix() {
-  //   this.matrix
-  //     .makeScale(...this.scaling.toArray())
-  //     .rotate(this.rotation)
-  //     .translate(...vector.copy(this.translation).toArray())
-  //   return this
-  // }
-
   letters: Record<string, () => GroupBuilder> = {
-    //.curve([0.2, 0.5], 0.5)
-    a: () => this.new([0.5, 0.5]).curve([0.707, 1], 0.5)
+    a: () =>
+      this.new([0.8, 0.8])
+        .curve([0.2, 0.5], -0.4, 0.3)
+        .curve([0.8, 0.2], -0.4, 0.5)
+        .new([0.8, 0.8])
+        .curve([0.8, 0.05], -0.05)
+        .slide(0.1),
+    b: () => this.new([0.1, 0.9]).curve([0.2, 0.2], 0)
   }
 }

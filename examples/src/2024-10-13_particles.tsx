@@ -1,20 +1,15 @@
-import { Vector2 } from 'three'
 import { Canvas2D, Reactive } from '../../src'
 import Asemic from '../../src/asemic/Asemic'
 import Brush from '../../src/asemic/Brush'
-import { range } from 'lodash'
-import { useKeyframes } from '../../src/asemic/drawingSystem/useKeyframes'
-import { groupArrayBy } from '../../util/src/three'
-import { rotate2d } from '../../util/src/shaders/manipulation'
 import { Keyframes } from '../../src/asemic/drawingSystem/Keyframes'
+import { useKeyframes } from '../../src/asemic/drawingSystem/useKeyframes'
 import { log } from 'mathjs'
 
 export default function ParticlesTest() {
-  const kf = new Keyframes([g => g.letter('a').debug()])
+  const kf = new Keyframes([g => g.letter('a')])
   const keyframeInfo = useKeyframes(kf, {
     alpha: 1
   })
-  kf.debug()
 
   return (
     <Reactive progress={t => (t / 2) % 1}>

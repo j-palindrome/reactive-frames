@@ -11,25 +11,37 @@ export type ReactiveContext<
 }
 export type AllowedChildren = JSX.Element | (JSX.Element | JSX.Element[])[]
 export type DepsOptions = any[] | number | (() => number)
+
 export type ParentProps<Props, Self> = Props & {
   name: string
-  draw?: (self: Self, context: ReactiveContext) => void
+  draw?: (self: Self, progress: number, context: ReactiveContext) => void
   setup?: (self: Self, context: ReactiveContext) => void
   deps?: DepsOptions
   children?: React.ReactElement | React.ReactElement[]
+  startEnd?: [number, number]
 }
 
 export type ChildProps<Props, Self, Parent> = Props & {
   name: string
-  draw?: (self: Self, parent: Parent, context: ReactiveContext) => void
+  draw?: (
+    self: Self,
+    parent: Parent,
+    progress: number,
+    context: ReactiveContext
+  ) => void
   setup?: (self: Self, parent: Parent, context: ReactiveContext) => void
   deps?: DepsOptions
+  startEnd?: [number, number]
 } & React.PropsWithChildren
 
 export type ComponentType = {
-  draw: ((context: ReactiveContext) => void) | null
+  draw: ((progress: number, context: ReactiveContext) => void) | null
   self: any
   update: 'always' | boolean
+  startEnd: [number, number]
+  hide?: (context: ReactiveContext) => void
+  show?: (context: ReactiveContext) => void
+  hidden: boolean
 }
 
 export type CanvasComponentProps = {

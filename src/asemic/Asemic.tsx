@@ -14,7 +14,7 @@ export default function Asemic(props: ParentProps<{}, {}>) {
           return {}
         }}>
         <Canvas
-          className='fixed h-screen w-screen'
+          style={{ height: '100%', width: '100%' }}
           gl={{ antialias: true }}
           orthographic
           camera={{

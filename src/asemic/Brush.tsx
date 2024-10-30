@@ -1,6 +1,6 @@
-import { useThree } from '@react-three/fiber'
+import { useFrame, useThree } from '@react-three/fiber'
 import { range } from 'lodash'
-import { useMemo, useRef } from 'react'
+import { Ref, RefObject, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { Vector2 } from 'three'
 import { bezier3, multiBezier2 } from '../../util/src/shaders/bezier'
@@ -9,6 +9,8 @@ import { hash } from '../../util/src/shaders/utilities'
 import { ChildComponent } from '../blocks/FrameChildComponents'
 import { ChildProps } from '../types'
 import FeedbackTexture, { FeedbackTextureRef } from './FeedbackTexture'
+import { Mesh } from '../frames/CanvasGL'
+import { Keyframes } from './drawingSystem/Keyframes'
 
 const targetVector = new THREE.Vector2()
 
@@ -32,33 +34,21 @@ export type BrushSettings = {
   modifyPosition?: string
   includes?: string
   between?: [number, number]
-  curveLengths: number[]
-  controlPointsCount: number
-  keyframeCount: number
-  keyframesTex: THREE.Data3DTexture
-  colorTex: THREE.Texture
   loop?: boolean
+  keyframes: Keyframes
 }
 
 export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
   let {
     spacing = 1,
-    curveLengths,
-    controlPointsCount = 3,
-    keyframeCount = 1,
-    keyframesTex,
-    colorTex,
     size = new Vector2(1, 1),
-    position = new Vector2(),
-    scale = new Vector2(1, 1),
-    rotation = 0,
     jitter,
     fragmentShader = /*glsl*/ `return color;`,
     vertexShader = /*glsl*/ `return position;`,
-    between = [0, 1],
     loop = false,
     modifyPosition,
-    includes
+    includes,
+    keyframes
   } = props
   jitter = {
     size: [0, 0],
@@ -68,6 +58,14 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
     rotation: 0,
     ...jitter
   }
+
+  const {
+    curveLengths,
+    controlPointsCount = 3,
+    keyframeCount = 1,
+    keyframesTex,
+    colorTex
+  } = keyframes.packToTexture()
 
   const resolution = useThree(state =>
     state.gl.getDrawingBufferSize(targetVector)
@@ -105,48 +103,24 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
     texture: new THREE.DataTexture()
   })
 
-  const draw = (progress: number) => {
-    if (progress < between[0] || progress > between[1]) {
-      meshRef.current.visible = false
-      return
-    } else {
-      meshRef.current.visible = true
-    }
-
-    // const mappedTime = (progress - between[0]) / (between[1] - between[0])
-
-    // meshRef.current.material.uniforms.progress.value = mappedTime
-    meshRef.current.material.uniforms.pointsTex.value = feedback.current.texture
-    meshRef.current.material.uniformsNeedUpdate = true
-
-    // let thisKey = Math.floor(mappedTime * (keyframeCount - 1))
-    // if (thisKey === keyframeCount - 1 && thisKey > 0) thisKey -= 1
-    // const lerpAmount = mappedTime * (keyframeCount - 1) - thisKey
-    // const thisKeyframe = keyframes[thisKey]
-    // const positionVec = (thisKeyframe.position ?? position)
-    //   .clone()
-    //   .lerp(keyframes[thisKey + 1]?.position ?? position, lerpAmount)
-    // meshRef.current.position.set(positionVec.x, positionVec.y, 0)
-    // const rotationRad = lerp(
-    //   keyframes[thisKey].rotation ?? rotation,
-    //   keyframes[thisKey + 1]?.rotation ?? rotation,
-    //   lerpAmount
-    // )
-    // meshRef.current.rotation.set(0, 0, rotationRad * 2 * Math.PI)
-    // const scaleVec = (thisKeyframe.scale ?? scale)
-    //   .clone()
-    //   .lerp(keyframes[thisKey + 1]?.scale ?? scale, lerpAmount)
-    // meshRef.current.scale.set(scaleVec.x, scaleVec.y, 1)
-  }
+  const { scene } = useThree()
 
   return (
     <ChildComponent
       options={{ ...props }}
       getSelf={() => {
-        return {}
+        return meshRef.current
       }}
-      defaultDraw={(self, frame, ctx) => {
-        draw(ctx.time)
+      defaultDraw={(self, frame, progress, ctx) => {
+        self.material.uniforms.pointsTex.value = feedback.current.texture
+        self.material.uniforms.progress.value = progress
+        self.material.uniformsNeedUpdate = true
+      }}
+      show={self => {
+        self.visible = true
+      }}
+      hide={self => {
+        self.visible = false
       }}>
       <FeedbackTexture
         name={`${props.name}-pointsTex`}
@@ -161,7 +135,8 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
           /*glsl*/ `
           uniform sampler3D keyframesTex;
           uniform float mixFactor;
-          ${loop ? `#define LOOP 1` : ''}
+
+          ${loop ? '#define LOOP 1' : ''}
 
           ${multiBezier2(loop ? keyframeCount + 2 : keyframeCount, {
             endPoints: loop ? false : true
@@ -218,7 +193,8 @@ ${
             pointsTex: { value: feedback.current.texture },
             jitter: { value: jitter },
             resolution: { value: resolution },
-            size: { value: size }
+            size: { value: size },
+            progress: { value: 0 }
           }}
           vertexShader={
             /*glsl*/ `
@@ -237,6 +213,7 @@ uniform sampler3D colorTex;
 uniform vec2 resolution;
 uniform vec2 size;
 uniform Jitter jitter;
+uniform float progress;
 
 out vec2 vUv;
 out vec4 vColor;
@@ -283,16 +260,16 @@ void main() {
   float thisThickness = 1.;
 
   vec2 jitterPosition = jitter.position * pixel
-    * (vec2(hash(thisPosition.x, .184), 
-      hash(thisPosition.y, .182)) - 0.5);
+    * (vec2(hash(thisPosition.x, .184 + progress), 
+      hash(thisPosition.y, .182 + progress)) - 0.5);
   vec2 jitterSize = 1. + jitter.size / size
-    * hash(thisPosition.x + thisPosition.y, .923);
+    * hash(thisPosition.x + thisPosition.y, .923 + progress);
   float jitterA = vColor.a 
     * (1. - (
-      hash(thisPosition.x + thisPosition.y, .294) 
+      hash(thisPosition.x + thisPosition.y, .294 + progress) 
       * jitter.a));
   float jitterRotation = jitter.rotation
-    * hash(thisPosition.x + thisPosition.y, .429)
+    * hash(thisPosition.x + thisPosition.y, .429 + progress)
     - (jitter.rotation / 2.);
 
   gl_Position = 
@@ -327,5 +304,25 @@ void main() {
         />
       </instancedMesh>
     </ChildComponent>
+  )
+}
+
+function DisplayTexture({
+  map
+}: {
+  map: RefObject<{ texture: THREE.Texture }>
+}) {
+  const displayRef = useRef<
+    THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>
+  >(null!)
+  useFrame(() => {
+    displayRef.current.material.map = map.current?.texture ?? null
+    displayRef.current.material.needsUpdate = true
+  })
+  return (
+    <mesh ref={displayRef} position={[0.5, 0.5, 0]}>
+      <planeGeometry />
+      <meshBasicMaterial />
+    </mesh>
   )
 }

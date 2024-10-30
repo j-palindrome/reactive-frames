@@ -1,8 +1,10 @@
 import { Color, Vector2 } from 'three'
-import { PointVector } from './drawingSystem/pointVector'
+import { PointVector } from './drawingSystem/PointVector'
 
 declare global {
   type Coordinate = [number, number]
+
+  type OpenCoordinate = Coordinate | number
 
   type KeyframeData = {
     groups: PointVector[][][]

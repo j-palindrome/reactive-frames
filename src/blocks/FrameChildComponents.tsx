@@ -18,9 +18,12 @@ function useCreateComponent<Self>(
   getSelf: () => Self | Promise<Self>,
   options: Record<string, any>,
   setupSelf?: (self: Self, context: ReactiveContext) => void,
-  drawSelf?: (self: Self, context: ReactiveContext) => void,
+  drawSelf?: (self: Self, progress: number, context: ReactiveContext) => void,
   drawSelfDeps?: DepsOptions,
-  cleanupSelf?: (self: Self) => void
+  cleanupSelf?: (self: Self) => void,
+  hideSelf?: (self: Self, context: ReactiveContext) => void,
+  showSelf?: (self: Self, context: ReactiveContext) => void,
+  startEnd?: [number, number]
 ) {
   const { allCreated, registerComponent, elements, props } =
     useInvariantContext(
@@ -48,8 +51,14 @@ function useCreateComponent<Self>(
 
     registerComponent(name, {
       self,
-      draw: drawSelf ? context => drawSelf(self, context) : null,
-      update: drawSelfDeps ? false : 'always'
+      draw: drawSelf
+        ? (progress, context) => drawSelf(self, progress, context)
+        : null,
+      update: drawSelfDeps ? false : 'always',
+      hidden: false,
+      hide: hideSelf ? context => hideSelf(self, context) : undefined,
+      show: showSelf ? context => showSelf(self, context) : undefined,
+      startEnd
     })
     return () => {
       registerComponent(name, null)
@@ -91,7 +100,9 @@ function useCreateComponent<Self>(
   useEffect(() => {
     if (!self) return
     registerComponent(name, {
-      draw: drawSelf ? context => drawSelf(self, context) : null
+      draw: drawSelf
+        ? (progress, context) => drawSelf(self, progress, context)
+        : null
     })
   }, [drawSelf])
 
@@ -218,7 +229,32 @@ function TopLevelComponent({
 
         // some components only draw on certain updates
         if (!component.update) continue
-        component.draw!(topContext)
+
+        if (component.startEnd) {
+          if (time < component.startEnd[0] || time > component.startEnd[1]) {
+            if (!component.hidden && component.hide !== undefined) {
+              component.hidden = true
+              invariant(component.hide)
+              component.hide(topContext)
+            }
+            return
+          } else if (
+            component.hidden &&
+            time >= component.startEnd[0] &&
+            time <= component.startEnd[1] &&
+            component.show !== undefined
+          ) {
+            component.hidden = false
+            invariant(component.show)
+            component.show(topContext)
+          }
+        }
+
+        const thisProgress = component.startEnd
+          ? (time - component.startEnd[0]) /
+            (component.startEnd[1] - component.startEnd[0])
+          : time
+        component.draw!(thisProgress, topContext)
         if (component.update === true) {
           // turn off draw until the next update is requested
           component.update = false
@@ -295,11 +331,20 @@ export function FrameComponent<Self, Options>({
   getSelf,
   cleanupSelf,
   children,
-  defaultDraw
+  defaultDraw,
+  hide,
+  show
 }: { options: ParentProps<Options, Self> } & {
   getSelf: (options: Options) => Self | Promise<Self>
   cleanupSelf?: (self: Self) => void
-  defaultDraw?: (self: Self, context: ReactiveContext, options: Options) => void
+  defaultDraw?: (
+    self: Self,
+    progress: number,
+    context: ReactiveContext,
+    options: Options
+  ) => void
+  hide?: (self: Self, context: ReactiveContext) => void
+  show?: (self: Self, context: ReactiveContext) => void
 } & React.PropsWithChildren) {
   const { self } = useCreateComponent(
     options.name,
@@ -307,18 +352,21 @@ export function FrameComponent<Self, Options>({
     options,
     options.setup,
     options.draw
-      ? (self, context) => {
-          options.draw!(self, context)
+      ? (self, progress, context) => {
+          options.draw!(self, progress, context)
         }
       : defaultDraw
-      ? (self, context) => {
-          defaultDraw(self, context, options)
+      ? (self, progress, context) => {
+          defaultDraw(self, progress, context, options)
         }
       : options.draw
       ? options.draw
       : undefined,
     options.deps,
-    cleanupSelf
+    cleanupSelf,
+    hide,
+    show,
+    options.startEnd
   )
 
   return (
@@ -336,7 +384,9 @@ export function ChildComponent<Self, Options, Frame>({
   getSelf,
   cleanupSelf,
   children,
-  defaultDraw
+  defaultDraw,
+  hide,
+  show
 }: {
   options: ChildProps<Options, Self, Frame>
 } & {
@@ -345,12 +395,15 @@ export function ChildComponent<Self, Options, Frame>({
   defaultDraw?: (
     self: Self,
     frame: Frame,
+    progress: number,
     context: ReactiveContext,
     options: Options
   ) => void
+  hide?: (self: Self, context: ReactiveContext) => void
+  show?: (self: Self, context: ReactiveContext) => void
 } & React.PropsWithChildren) {
   const { frame } = useInvariantContext(FrameContext)
-  const { self } = useCreateComponent(
+  useCreateComponent(
     options.name,
     async () => await getSelf(options, frame),
     options,
@@ -358,16 +411,19 @@ export function ChildComponent<Self, Options, Frame>({
       ? (self, context) => options.setup!(self, frame, context)
       : undefined,
     options.draw
-      ? (self, context) => {
-          options.draw!(self, frame, context)
+      ? (self, progress, context) => {
+          options.draw!(self, frame, progress, context)
         }
       : defaultDraw
-      ? (self, context) => {
-          defaultDraw(self, frame, context, options)
+      ? (self, progress, context) => {
+          defaultDraw(self, frame, progress, context, options)
         }
       : undefined,
     options.deps,
-    cleanupSelf
+    cleanupSelf,
+    hide,
+    show,
+    options.startEnd
   )
   return <>{children}</>
 }
@@ -377,17 +433,22 @@ export const defineChildComponent = <Self, Options, Frame>(
   defaultDraw?: (
     self: Self,
     frame: Frame,
+    progress: number,
     context: ReactiveContext,
     options: Options
   ) => void,
-  cleanupSelf?: (self: Self) => void
+  cleanupSelf?: (self: Self) => void,
+  hide?: (self: Self, context: ReactiveContext) => void,
+  show?: (self: Self, context: ReactiveContext) => void
 ) => {
   return (options: ChildProps<Options, Self, Frame>) => (
     <ChildComponent
       options={options}
       getSelf={getSelf}
       cleanupSelf={cleanupSelf}
-      defaultDraw={defaultDraw}>
+      defaultDraw={defaultDraw}
+      hide={hide}
+      show={show}>
       {options.children}
     </ChildComponent>
   )
@@ -397,17 +458,22 @@ export const defineFrameComponent = <Self, Options>(
   getSelf: (options: Options) => Self,
   defaultDraw?: (
     self: Self,
+    progress: number,
     context: ReactiveContext,
     options: Options
   ) => void,
-  cleanupSelf?: (self: Self) => void
+  cleanupSelf?: (self: Self) => void,
+  hide?: (self: Self, context: ReactiveContext) => void,
+  show?: (self: Self, context: ReactiveContext) => void
 ) => {
   return (options: ParentProps<Options, Self>) => (
     <FrameComponent
       options={options}
       getSelf={getSelf}
       cleanupSelf={cleanupSelf}
-      defaultDraw={defaultDraw}>
+      defaultDraw={defaultDraw}
+      hide={hide}
+      show={show}>
       {options.children}
     </FrameComponent>
   )

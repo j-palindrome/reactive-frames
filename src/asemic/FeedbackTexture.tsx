@@ -101,8 +101,8 @@ void main() {
       getSelf={() => {
         return {}
       }}
-      defaultDraw={(self, parent, ctx) => {
-        draw(ctx.time)
+      defaultDraw={(self, parent, progress, ctx) => {
+        draw(progress)
       }}>
       {createPortal(
         <mesh position={[0.5, 0.5, 0]} ref={feedbackMesh}>

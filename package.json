@@ -11,7 +11,7 @@
   },
   "scripts": {
     "build": "tsc",
-    "dev": "tsc --watch"
+    "dev": "cd examples && pnpm dev"
   },
   "version": "0.2.16",
   "dependencies": {

@@ -2,6 +2,8 @@ import { PointVector } from './PointVector'
 import * as THREE from 'three'
 
 export default abstract class Builder {
+  originSet?: Coordinate
+
   constructor() {}
 
   protected makeCurvePath(curve: PointVector[]) {
@@ -66,6 +68,7 @@ export default abstract class Builder {
   }
 
   protected modeSet: 'absolute' | 'relative' | 'polar' | 'steer' = 'relative'
+  protected savedMode: Builder['modeSet'] | undefined
   gridSet: Coordinate = [100, 100]
   log: {
     func: string
@@ -86,9 +89,10 @@ export default abstract class Builder {
     this.gridSet = grid
   }
 
-  mode(mode: Builder['modeSet']) {
+  mode(mode: Builder['modeSet'], origin?: Coordinate) {
     this.addToLog('mode', undefined, [mode])
     this.modeSet = mode
+    this.originSet = origin
     return this
   }
 }

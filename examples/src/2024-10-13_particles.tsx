@@ -10,7 +10,7 @@ export default function ParticlesTest() {
     //     .letter('e')
     //     .targetCurve(0, -1)
     //     .eachPoint(p => p.addScalar(0.5)),
-    g => g.letter('e')
+    g => g.letter('k')
   ])
 
   return (
@@ -26,27 +26,6 @@ export default function ParticlesTest() {
           loop
         />
       </Asemic>
-      <Canvas2D
-        name='c'
-        className='absolute top-0 left-0'
-        draw={c => {
-          // c.clearRect(0, 0, c.canvas.width, c.canvas.height)
-          // c.fillStyle = 'red'
-          // c.strokeStyle = 'red'
-          // c.lineWidth = 10
-          // for (let i = 0; i < kf.keyframes[0].groups[0][0].length; i++) {
-          //   const thisCurve = kf.keyframes[0].groups[0][0][i].position
-          //   c.beginPath()
-          //   c.arc(
-          //     thisCurve.x * window.innerWidth * 2,
-          //     window.innerHeight * 2 - thisCurve.y * window.innerHeight * 2,
-          //     10,
-          //     0,
-          //     Math.PI * 2
-          //   )
-          //   c.fill()
-          // }
-        }}></Canvas2D>
     </Reactive>
   )
 }

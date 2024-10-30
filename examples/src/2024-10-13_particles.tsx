@@ -10,7 +10,7 @@ export default function ParticlesTest() {
     //     .letter('e')
     //     .targetCurve(0, -1)
     //     .eachPoint(p => p.addScalar(0.5)),
-    g => g.letter('f')
+    g => g.letter('e')
   ])
 
   return (

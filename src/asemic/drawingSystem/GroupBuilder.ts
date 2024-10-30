@@ -70,9 +70,10 @@ export default class GroupBuilder extends Builder {
   newIntersect(progress: number, target: number = -1) {
     this.addToLog('newIntersect', undefined, [progress, target])
     target = target < 0 ? target + this.curves.length : target
-    const intersect = this.makeCurvePath(this.curves[target]).getPointAt(
-      progress
-    )
+    const curvePath = this.makeCurvePath(this.curves[target])
+    console.log('curvepath:', curvePath, this.curves)
+
+    const intersect = curvePath.getPointAt(progress)
 
     this.curves.push([])
     this.targetCurve(-1)
@@ -155,7 +156,7 @@ export default class GroupBuilder extends Builder {
   }
 
   points(coords: Coordinate[]) {
-    this.addToLog('points', coords)
+    this.addToLog('points', [coords])
     return this.eachCurve(curve => {
       this.addToCurve(
         curve,
@@ -186,6 +187,10 @@ export default class GroupBuilder extends Builder {
   }
 
   shift(multiplier: Coordinate = [1, 1], adder: Coordinate = [0, 0]) {
+    const mapCoord = (coord: Coordinate) =>
+      `[${fixNumber(coord[0] * multiplier[0] + adder[0])}, ${fixNumber(
+        coord[1] * multiplier[1] + adder[1]
+      )}]`
     let output = `this`
     this.log.forEach(
       x =>
@@ -195,9 +200,11 @@ export default class GroupBuilder extends Builder {
                 .map(coord =>
                   typeof coord === 'number'
                     ? coord * multiplier[0] + adder[0]
-                    : `[${fixNumber(
-                        coord[0] * multiplier[0] + adder[0]
-                      )}, ${fixNumber(coord[1] * multiplier[1] + adder[1])}]`
+                    : typeof coord[0] === 'number'
+                    ? mapCoord(coord as Coordinate)
+                    : `[${coord
+                        .map(x => mapCoord(x as Coordinate))
+                        .join(', ')}]`
                 )
                 .join(', ')
             : ''
@@ -211,6 +218,8 @@ export default class GroupBuilder extends Builder {
     )
     this.curves = []
     eval(output)
+    console.log(output)
+
     return this
   }
 
@@ -261,6 +270,11 @@ export default class GroupBuilder extends Builder {
     return point
   }
 
+  eval(callback: (self: this) => void) {
+    callback(this)
+    return this
+  }
+
   letters: Record<string, () => GroupBuilder> = {
     a: () =>
       this.new([0.8, 0.8])
@@ -283,11 +297,14 @@ export default class GroupBuilder extends Builder {
         .curve([-0.5, -0.2], -0.2)
         .curve([0.9, 0.15], -0.2),
     e: () =>
-      this.new([0.8, 0.5])
-        .points([[0.8, 0.7]])
-        .arc([-0.3, -0.2], 0.8)
+      this.new([80, 50])
+        .mode('absolute')
+        .points([[80, 70]])
+        .mode('relative')
+        .arc([-30, -20], 0.8)
         .newIntersect(0.55)
-        .curve([0.8, 0.5], 0),
+        .mode('absolute')
+        .curve([80, 50], 0, 0.5),
     f: () =>
       this.new([70, 70])
         .arc([-20, 0], 0.5)

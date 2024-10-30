@@ -67,9 +67,17 @@ export default abstract class Builder {
 
   protected modeSet: 'absolute' | 'relative' | 'polar' | 'steer' = 'relative'
   gridSet: Coordinate = [100, 100]
-  log: { func: string; coords?: OpenCoordinate[]; endArgs?: any[] }[] = []
+  log: {
+    func: string
+    coords?: (OpenCoordinate | Coordinate[])[]
+    endArgs?: any[]
+  }[] = []
   logEnabled = true
-  protected addToLog(func: string, coords?: OpenCoordinate[], endArgs?: any[]) {
+  protected addToLog(
+    func: string,
+    coords?: (OpenCoordinate | Coordinate[])[],
+    endArgs?: any[]
+  ) {
     if (!this.logEnabled) return
     this.log.push({ func, coords, endArgs })
   }

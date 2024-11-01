@@ -231,14 +231,15 @@ export default class GroupBuilder extends Builder {
   }
 
   text(str: string) {
-    this.push({ origin: [0, 0] })
+    this.push({ origin: [10, 0] })
     for (let letter of str) {
       if (this.letters[letter]) this.letter(letter).push({ origin: [10, 0] })
     }
     this.targetGroups(0, -1)
 
+    const maxX = max(this.frames[0].groups.flat(2).map(x => x.x))
     this.eachGroup(group =>
-      group.flat().forEach(point => point.divideScalar(str.length))
+      group.flat().forEach(point => point.divideScalar(maxX!))
     )
 
     return this

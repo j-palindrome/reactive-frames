@@ -103,8 +103,6 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
     texture: new THREE.DataTexture()
   })
 
-  const { scene } = useThree()
-
   return (
     <ChildComponent
       options={{ ...props }}

@@ -107,6 +107,7 @@ export default abstract class Builder {
     origin?: Coordinate
     rotation?: number
   }) {
+    return this
     const m = new THREE.Matrix3()
     m.makeScale(scale[0] / this.gridSet[0], scale[1] / this.gridSet[1])
       .rotate(rotation * Math.PI * 2)
@@ -329,7 +330,6 @@ export default abstract class Builder {
     this.eachPoint(p => {
       const lerpX = (p.x - minVector.x) / (maxVector.x - minVector.x || 1)
       const lerpY = (p.y - minVector.y) / (maxVector.y - minVector.y || 1)
-      console.log(lerpX, lerpY)
 
       p.set(
         lerp(fromMapped[0], toMapped[0], lerpX),

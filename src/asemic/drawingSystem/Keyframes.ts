@@ -132,6 +132,7 @@ export class Keyframes extends Builder {
       ],
       THREE.RGBAFormat
     )
+
     return {
       keyframesTex,
       colorTex,

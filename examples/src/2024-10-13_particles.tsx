@@ -4,14 +4,9 @@ import Brush from '../../src/asemic/Brush'
 import { Keyframes } from '../../src/asemic/drawingSystem/Keyframes'
 
 export default function ParticlesTest() {
-  const kf = new Keyframes([
-    // g =>
-    //   g
-    //     .letter('e')
-    //     .targetCurve(0, -1)
-    //     .eachPoint(p => p.addScalar(0.5)),
-    g => g.letter('k')
-  ])
+  const kf = new Keyframes(g => g.text('abcdefghijklmnopqrstuvwxyz'))
+    .targetGroup(0, -1)
+    .eachPoint(p => p.add({ x: 0, y: 1 / 2 }))
 
   return (
     <Reactive progress={t => (t / 2) % 1}>

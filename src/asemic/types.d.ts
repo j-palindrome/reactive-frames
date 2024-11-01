@@ -4,8 +4,23 @@ import Builder from './drawingSystem/Builder'
 
 declare global {
   type Coordinate =
+    | [
+        number,
+        number,
+        (
+          | {
+              mode?: Builder['modeSet']
+              strength?: number
+              thickness?: number
+              origin?: Coordinate
+              grid?: [number, number]
+              scale?: [number, number]
+              rotation?: number
+            }
+          | undefined
+        )
+      ]
     | [number, number]
-    | [number, number, { mode?: Builder['modeSet']; strength?: number }]
 
   type OpenCoordinate = Coordinate | number
 

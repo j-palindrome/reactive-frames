@@ -18,10 +18,11 @@ export class Keyframes extends Builder {
     alpha: 1
   }
 
-  constructor(generate: ((g: GroupBuilder) => GroupBuilder)[]) {
+  constructor(generate: (g: GroupBuilder) => GroupBuilder) {
     super()
-    const startCurves = generate.map(generate => generate(new GroupBuilder()))
-    this.keyframes = [{ groups: startCurves.map(x => x.curves) }]
+    const startCurves = generate(new GroupBuilder())
+    this.keyframes = [{ groups: startCurves.groups }]
+
     this.targetGroups = [0, this.keyframes[0].groups.length - 1]
     this.targetFrames = [0, 0]
     this.curveCounts = this.keyframes[0].groups.map(x => x.length)

@@ -9,9 +9,6 @@ const vector = new Vector2()
 const vector2 = new Vector2()
 const vector3 = new Vector2()
 export class Keyframes extends Builder {
-  keyframes: KeyframeData[]
-  private targetFrames: [number, number]
-  private targetGroups: [number, number]
   curveCounts: number[]
   defaults = {
     color: [1, 1, 1],
@@ -21,114 +18,51 @@ export class Keyframes extends Builder {
   constructor(generate: (g: GroupBuilder) => GroupBuilder) {
     super()
     const startCurves = generate(new GroupBuilder())
-    this.keyframes = [{ groups: startCurves.groups }]
-
-    this.targetGroups = [0, this.keyframes[0].groups.length - 1]
-    this.targetFrames = [0, 0]
-    this.curveCounts = this.keyframes[0].groups.map(x => x.length)
-  }
-
-  debug() {
-    console.log(
-      cloneDeep(this.keyframes)
-        .slice(this.targetFrames[0], this.targetFrames[1] + 1)
-        .map(x =>
-          x.groups
-            .slice(this.targetGroups[0], this.targetGroups[1] + 1)
-            .map(g =>
-              g
-                .map(c =>
-                  c
-                    .map(
-                      p =>
-                        `${p
-                          .toArray()
-                          .map(p => Math.floor(p * 100))
-                          .join(',')}`
-                    )
-                    .join(' ')
-                )
-                .join('\n')
-            )
-            .join('\n\n')
-        )
-        .join('\n\n')
-    )
-    return this
+    this.frames = startCurves.frames
+    this.targetGroupsSet = [0, this.frames[0].groups.length - 1]
+    this.targetFramesSet = [0, 0]
+    this.curveCounts = this.frames[0].groups.map(x => x.length)
   }
 
   copyFrame(keyframe: number, copyCount: number = 1) {
-    if (keyframe < 0) keyframe += this.keyframes.length
+    if (keyframe < 0) keyframe += this.frames.length
     for (let i = 0; i < copyCount; i++) {
-      this.keyframes.push(cloneDeep(this.keyframes[keyframe]))
+      this.frames.push(cloneDeep(this.frames[keyframe]))
     }
-    this.targetFrames = [this.keyframes.length - 1, this.keyframes.length - 1]
+    this.targetFramesSet = [this.frames.length - 1, this.frames.length - 1]
     return this
   }
 
   interpolateFrame(keyframe: number, amount = 0.5) {
-    const interpKeyframe = cloneDeep(this.keyframes[keyframe])
+    const interpKeyframe = cloneDeep(this.frames[keyframe])
     interpKeyframe.groups.forEach((group, groupI) =>
       group.forEach((x, curveI) =>
         x.forEach((point, pointI) =>
           point.lerp(
-            this.keyframes[keyframe + 1].groups[groupI][curveI][pointI],
+            this.frames[keyframe + 1].groups[groupI][curveI][pointI],
             amount
           )
         )
       )
     )
-    this.keyframes.splice(keyframe + 1, 0, interpKeyframe)
+    this.frames.splice(keyframe + 1, 0, interpKeyframe)
     return this
-  }
-
-  targetFrame(from: number, to?: number) {
-    if (from < 0) from += this.keyframes.length
-    if (to === undefined) to = from
-    else if (to < 0) to += this.keyframes.length
-    this.targetFrames = [from, to]
-    return this
-  }
-
-  targetGroup(from: number, to?: number) {
-    if (from < 0) from += this.curveCounts.length
-    if (to === undefined) to = from
-    else if (to < 0) to += this.curveCounts.length
-    this.targetGroups = [from, to]
-    return this
-  }
-
-  eachFrame(callback: (frame: KeyframeData) => void) {
-    for (let i = this.targetFrames[0]; i <= this.targetFrames[1]; i++) {
-      callback(this.keyframes[i])
-    }
-    return this
-  }
-
-  eachCurve(callback: (curve: PointVector[]) => void) {
-    return this.eachFrame(frame => {
-      for (let i = this.targetGroups[0]; i <= this.targetGroups[1]; i++) {
-        for (let curve of frame.groups[i]) {
-          callback(curve)
-        }
-      }
-    })
   }
 
   packToTexture() {
     // if (this.keyframes.length == 2) {
     //   this.interpolateFrame(0)
     // }
-    const keyframeCount = this.keyframes.length
-    const curveCount = this.keyframes[0].groups.flat().length
+    const keyframeCount = this.frames.length
+    const curveCount = this.frames[0].groups.flat().length
 
     const controlPointsCount = max(
-      this.keyframes.flatMap(x => x.groups.flat()).map(x => x.length)
+      this.frames.flatMap(x => x.groups.flat()).map(x => x.length)
     )!
 
     const subdivisions = controlPointsCount - 2
 
-    const totalCurves = this.keyframes[0].groups.flat().length
+    const totalCurves = this.frames[0].groups.flat().length
     const curveLengths = range(totalCurves).flatMap(() => 0)
     const createTexture = (
       getPoint: (point: PointVector) => number[],
@@ -162,7 +96,7 @@ export class Keyframes extends Builder {
       })
 
       const array = new Float32Array(
-        this.keyframes.flatMap(keyframe => {
+        this.frames.flatMap(keyframe => {
           return keyframe.groups.flatMap(group =>
             group.flatMap(curve => {
               return curve.flatMap(point => {

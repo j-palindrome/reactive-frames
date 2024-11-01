@@ -16,6 +16,7 @@ declare global {
               grid?: [number, number]
               scale?: [number, number]
               rotation?: number
+              reset?: true
             }
           | undefined
         )

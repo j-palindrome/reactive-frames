@@ -2,17 +2,18 @@ import { Vector2 } from 'three'
 const vector = new Vector2()
 const vector2 = new Vector2()
 
-export class PointVector extends Vector2 {
-  curve: PointVector[]
+export class PointBuilder extends Vector2 {
+  curve: PointBuilder[]
   index: number
   strength: number
   color?: [number, number, number]
   alpha?: number
   thickness?: number
+  gridSet?: [number, number]
 
   constructor(
     point: Coordinate = [0, 0],
-    curve: PointVector[],
+    curve: PointBuilder[],
     index: number,
     {
       strength = 0,
@@ -36,20 +37,20 @@ export class PointVector extends Vector2 {
   }
 
   twist(from: Coordinate, amount: number) {
-    this.rotateAround(vector.set(...from), amount * Math.PI * 2)
+    this.rotateAround(vector.set(from[0], from[1]), amount * Math.PI * 2)
     return this
   }
 
   pull(from: Coordinate, to: Coordinate, amount: number) {
-    this.sub(vector.set(...from))
-      .lerp(vector2.set(...to), amount)
+    this.sub(vector.set(from[0], from[1]))
+      .lerp(vector2.set(to[0], to[1]), amount)
       .add(vector)
     return this
   }
 
   stretch(from: Coordinate, to: Coordinate) {
-    this.sub(vector.set(...from))
-      .multiply(vector2.set(...to))
+    this.sub(vector.set(from[0], from[1]))
+      .multiply(vector2.set(to[0], to[1]))
       .add(vector)
     return this
   }
@@ -72,7 +73,7 @@ export class PointVector extends Vector2 {
   }
 
   override clone() {
-    return new PointVector([this.x, this.y], this.curve, this.index, {
+    return new PointBuilder([this.x, this.y], this.curve, this.index, {
       strength: this.strength,
       color: this.color,
       alpha: this.alpha,

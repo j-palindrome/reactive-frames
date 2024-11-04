@@ -1,7 +1,7 @@
 import { cloneDeep, last, max, maxBy, min, range } from 'lodash'
 import * as THREE from 'three'
 import { Vector2 } from 'three'
-import { PointVector } from './PointVector'
+import { PointBuilder } from './PointBuilder'
 import Builder from './Builder'
 import { lerp } from 'three/src/math/MathUtils.js'
 
@@ -18,8 +18,8 @@ export default class GroupBuilder extends Builder {
     super()
   }
 
-  lastCurve(callback: (curve: PointVector[]) => void) {
-    return this.eachGroup(group => {
+  lastCurve(callback: (curve: PointBuilder[]) => void) {
+    return this.groups(group => {
       callback(group[group.length - 1])
     })
   }
@@ -39,46 +39,46 @@ export default class GroupBuilder extends Builder {
   }
 
   private addToCurve(points: Coordinate[]) {
-    return this.lastCurve(curve =>
+    return this.lastCurve(curve => {
       curve.push(
         ...points.map(
           (point, i) =>
-            new PointVector(point, curve, i + curve.length, {
+            new PointBuilder(point, curve, i + curve.length, {
               strength: point[2]?.strength
             })
         )
       )
-    )
+      this.lastPoint.set(last(points)![0], last(points)![1])
+    })
   }
 
   new(origin: Coordinate, newGroup: boolean = false) {
     if (newGroup) {
-      this.frames[0].groups.push([])
-      this.targetGroups(-1)
-      this.modeSet = 'absolute'
-      this.scaleSet = this.gridSet
-      this.rotationSet = 0
-      this.originSet = [0, 0]
+      this.framesSet[0].groups.push([])
+      this.target(-1)
+      this.clearTransforms()
     }
-    this.addToLog('new', { coords: [origin] })
+    this.addToLog('new', { coords: [origin], endArgs: [newGroup] })
     origin = this.getRelative(origin)
-    this.frames[0].groups[this.targetGroupsSet[0]].push([])
+    this.framesSet[0].groups[this.targetGroupsSet[0]].push([])
     this.addToCurve([origin])
     return this
   }
 
-  getPoint(curve: number, point: number): PointVector {
+  getPoint(curve: number, point: number): PointBuilder {
     if (curve < 0)
-      curve += this.frames[0].groups[this.targetGroupsSet[0]].length
+      curve += this.framesSet[0].groups[this.targetGroupsSet[0]].length
     if (point < 0)
-      point += this.frames[0].groups[this.targetGroupsSet[0]][curve].length
-    const p = this.frames[0].groups[this.targetGroupsSet[0]][curve][point]!
+      point += this.framesSet[0].groups[this.targetGroupsSet[0]][curve].length
+    const p = this.framesSet[0].groups[this.targetGroupsSet[0]][curve][point]!
     return p
   }
 
   arc(centerPoint: Coordinate, amount: number) {
     this.addToLog('arc', { coords: [centerPoint], endArgs: [amount] })
     centerPoint = this.getRelative(centerPoint)
+    console.log(centerPoint)
+
     return this.lastCurve(curve => {
       const lastPoint = last(curve)!
       vector.set(centerPoint[0], centerPoint[1])
@@ -157,7 +157,7 @@ export default class GroupBuilder extends Builder {
     })
   }
 
-  points(...coords: Coordinate[]) {
+  addPoints(...coords: Coordinate[]) {
     this.addToLog('point', { coords })
     return this.lastCurve(curve => {
       for (let coord of coords) {
@@ -214,7 +214,7 @@ export default class GroupBuilder extends Builder {
             : ''
         })\n`)
     )
-    this.frames[0].groups = []
+    this.framesSet[0].groups = []
     eval(output)
     return this
   }
@@ -224,28 +224,61 @@ export default class GroupBuilder extends Builder {
     return this
   }
 
-  protected getLastPoint(index: number = -1): PointVector {
-    const lastGroup = this.frames[0].groups[this.targetGroupsSet[0]]
+  protected getLastPoint(index: number = -1): PointBuilder {
+    const lastGroup = this.framesSet[0].groups[this.targetGroupsSet[0]]
     const lastCurve = lastGroup[lastGroup.length - 1]
     return lastCurve[lastCurve.length + index]
   }
 
-  text(str: string) {
-    this.push({ origin: [10, 0] })
-    for (let letter of str) {
-      if (this.letters[letter]) this.letter(letter).push({ origin: [10, 0] })
-    }
-    this.targetGroups(0, -1)
+  text(
+    str: string,
+    {
+      width = this.gridSet[0],
+      origin = [0, 0]
+    }: { width?: number; origin?: Coordinate } = {}
+  ) {
+    origin = this.getRelative(origin)
 
-    const maxX = max(this.frames[0].groups.flat(2).map(x => x.x))
-    this.eachGroup(group =>
-      group.flat().forEach(point => point.divideScalar(maxX!))
+    this.push({ origin: [10, 0] })
+    let lineCount = 0
+    for (let letter of str) {
+      if (this.letters[letter]) {
+        this.letter(letter).push({ origin: [10, 0] })
+      } else if (letter === '\n') {
+        lineCount++
+        this.clearMatrices().push({ origin: [10, -110 * lineCount] })
+      }
+    }
+
+    const maxX = max(this.framesSet[0].groups.flat(2).map(x => x.x))
+    this.groups(
+      group =>
+        group
+          .flat()
+          .forEach(point =>
+            point
+              .multiplyScalar(width / this.gridSet[0] / maxX!)
+              .add({ x: origin[0], y: origin[1] })
+          ),
+      [0, -1]
     )
+
+    this.clearMatrices()
+    this.clearTransforms()
 
     return this
   }
 
+  // private eachFrame(
+  //   callback: (frame: KeyframeData) => void,
+  //   fromTo?: [number, number] | undefined
+  // ) {
+  //   return this
+  // }
+
   letters: Record<string, () => GroupBuilder> = {
+    ' ': () => this.push({ origin: [50, 0] }),
+    '\t': () => this.push({ origin: [200, 0] }),
     a: () =>
       this.new([80, 80], true)
         .curve([20, 50], [30, -40])
@@ -278,7 +311,7 @@ export default class GroupBuilder extends Builder {
         .push({ origin: [50, 0] }),
     e: () =>
       this.new([80, 50], true)
-        .points([80, 70])
+        .addPoints([80, 70])
         .arc([-30, -20, { mode: 'relative' }], 0.8)
         .new([55, -1, { mode: 'intersect' }])
         .line([80, 50, { mode: 'absolute' }])
@@ -294,11 +327,24 @@ export default class GroupBuilder extends Builder {
         .within([0, 0, { mode: 'absolute' }], [50, 100])
         .push({ origin: [25, 0] }),
     g: () =>
-      this.new([70, 60, { origin: [0, -20] }], true)
+      this.new([70, 60], true)
         .arc([20, -45, { mode: 'polar' }], 1)
         .new([0, 0])
-        .points([100, -25], [35, 20, { mode: 'absolute' }])
-        .within([0, -50, { reset: true }], [50, 50])
+        .addPoints(
+          [100, -25],
+          [
+            50,
+            0,
+            {
+              origin: [0, -100, { mode: 'absolute' }],
+              mode: 'intersect'
+            }
+          ],
+          [0, 20, { mode: 'relative' }]
+        )
+        .debug()
+        .within([0, -50, { mode: 'absolute' }], [50, 50])
+        .debug()
         .push({ origin: [50, 0] }),
     h: () =>
       this.new([10, 90], true)
@@ -319,8 +365,8 @@ export default class GroupBuilder extends Builder {
         .new([51, 76, { origin: [0, -40], scale: [100, 120] }], true)
         .arc([-1, -1, { mode: 'relative' }], 1)
         .new([-1, -10])
-        .points([10, -60], [-30, 0], [0, 15])
-        .within([0, -50, { mode: 'absolute', reset: true }], [50, 50])
+        .addPoints([10, -60], [-30, 0], [0, 15])
+        .within([0, -50, { mode: 'absolute' }], [50, 50])
         .push({ origin: [50, 0] }),
     k: () =>
       this.new([30, 90], true)
@@ -330,15 +376,16 @@ export default class GroupBuilder extends Builder {
           30,
           { mode: 'absolute', origin: [50, -1, { mode: 'intersect' }] }
         ])
-        .points(
-          [0, 0, { strength: 1, mode: 'absolute' }],
+        .addPoints(
+          [0, 0, { strength: 1, mode: 'absolute', reset: false }],
           [50, 0, { origin: [100, -2, { mode: 'intersect' }] }]
         )
+        .debug()
         .within([0, 0, { reset: true }], [50, 100])
         .push({ origin: [50, 0] }),
     l: () =>
       this.new([50, 90], true)
-        .points([0, -70, { mode: 'relative' }])
+        .addPoints([0, -70, { mode: 'relative' }])
         .curve([10, -10], [50, -50, { strength: 0.5 }])
         .within([0, 0, { mode: 'absolute' }], [25, 100])
         .push({ origin: [25, 0] }),
@@ -355,7 +402,7 @@ export default class GroupBuilder extends Builder {
         ],
         true
       )
-        .points([0, 100], [100, 100], [100, 0])
+        .addPoints([0, 100], [100, 100], [100, 0])
         .new([
           0,
           0,
@@ -365,12 +412,12 @@ export default class GroupBuilder extends Builder {
             scale: [40, 40]
           }
         ])
-        .points([0, 100], [100, 100], [100, 0])
+        .addPoints([0, 100], [100, 100], [100, 0])
         .within([0, 0, { reset: true }], [75, 50])
         .push({ origin: [75, 0] }),
     n: () =>
       this.new([70, 10], true)
-        .points(
+        .addPoints(
           [
             0,
             100,
@@ -401,10 +448,10 @@ export default class GroupBuilder extends Builder {
     q: () =>
       this.new([50, 80, { scale: [100, 130], origin: [0, -40] }], true)
         .line([0, -80, { mode: 'relative', strength: 1 }])
-        .points([30, 12, { mode: 'polar' }])
+        .addPoints([30, 12, { mode: 'polar' }])
         .new([5, -1, { mode: 'intersect' }])
-        .curve([0, -30, { mode: 'relative' }], [-40, -80], [140, -80])
-        .within([0, -50, { mode: 'absolute', reset: true }], [60, 70])
+        .curve([0, -30, { mode: 'relative' }], [-20, -170], [120, -170])
+        .within([0, -50, { mode: 'absolute' }], [50, 100, { mode: 'relative' }])
         .push({ origin: [50, 0] }),
     r: () =>
       this.new([30, 60], true)
@@ -434,16 +481,13 @@ export default class GroupBuilder extends Builder {
         .within([0, 0, { mode: 'absolute' }], [50, 50])
         .push({ origin: [50, 0] }),
     v: () =>
-      this.new(
-        [0, 100, { scale: [60, 50], origin: [0, 10], mode: 'absolute' }],
-        true
-      )
+      this.new([0, 100, { mode: 'absolute' }], true)
         .curve([100, 0, { mode: 'relative' }], [50, -100, { strength: 1 }])
-        .within([0, 0, { mode: 'absolute', reset: true }], [50, 50])
+        .within([0, 0, { mode: 'absolute' }], [50, 50])
         .push({ origin: [50, 0] }),
     w: () =>
       this.new([0, 50, { scale: [80, 170], origin: [0, -25] }], true)
-        .points(
+        .addPoints(
           [25, 0, { strength: 1 }],
           [50, 50, { strength: 1 }],
           [75, 0, { strength: 1 }],
@@ -467,7 +511,7 @@ export default class GroupBuilder extends Builder {
         .push({ origin: [50, 0] }),
     z: () =>
       this.new([0, 100, { scale: [50, 70] }], true)
-        .points(
+        .addPoints(
           [100, 100, { strength: 1 }],
           [0, 0, { strength: 1 }],
           [100, 0, { strength: 1 }]

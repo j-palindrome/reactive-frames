@@ -1,5 +1,5 @@
 import { Color, Vector2 } from 'three'
-import { PointVector } from './drawingSystem/PointVector'
+import { PointBuilder } from './drawingSystem/PointBuilder'
 import Builder from './drawingSystem/Builder'
 
 declare global {
@@ -16,7 +16,7 @@ declare global {
               grid?: [number, number]
               scale?: [number, number]
               rotation?: number
-              reset?: true
+              reset?: boolean
             }
           | undefined
         )
@@ -26,7 +26,7 @@ declare global {
   type OpenCoordinate = Coordinate | number
 
   type KeyframeData = {
-    groups: PointVector[][][]
+    groups: PointBuilder[][][]
     position?: Vector2
     scale?: Vector2
     rotation?: number

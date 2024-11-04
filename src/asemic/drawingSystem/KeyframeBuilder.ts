@@ -1,7 +1,7 @@
 import { cloneDeep, max, range, sumBy } from 'lodash'
 import { Data3DTexture, Vector2 } from 'three'
 import GroupBuilder from './GroupBuilder'
-import { PointVector } from './PointVector'
+import { PointBuilder } from './PointBuilder'
 import * as THREE from 'three'
 import Builder from './Builder'
 
@@ -18,34 +18,34 @@ export class Keyframes extends Builder {
   constructor(generate: (g: GroupBuilder) => GroupBuilder) {
     super()
     const startCurves = generate(new GroupBuilder())
-    this.frames = startCurves.frames
-    this.targetGroupsSet = [0, this.frames[0].groups.length - 1]
+    this.framesSet = startCurves.framesSet
+    this.targetGroupsSet = [0, this.framesSet[0].groups.length - 1]
     this.targetFramesSet = [0, 0]
-    this.curveCounts = this.frames[0].groups.map(x => x.length)
+    this.curveCounts = this.framesSet[0].groups.map(x => x.length)
   }
 
   copyFrame(keyframe: number, copyCount: number = 1) {
-    if (keyframe < 0) keyframe += this.frames.length
+    if (keyframe < 0) keyframe += this.framesSet.length
     for (let i = 0; i < copyCount; i++) {
-      this.frames.push(cloneDeep(this.frames[keyframe]))
+      this.framesSet.push(cloneDeep(this.framesSet[keyframe]))
     }
-    this.targetFramesSet = [this.frames.length - 1, this.frames.length - 1]
+    this.target(undefined, -1)
     return this
   }
 
   interpolateFrame(keyframe: number, amount = 0.5) {
-    const interpKeyframe = cloneDeep(this.frames[keyframe])
+    const interpKeyframe = cloneDeep(this.framesSet[keyframe])
     interpKeyframe.groups.forEach((group, groupI) =>
       group.forEach((x, curveI) =>
         x.forEach((point, pointI) =>
           point.lerp(
-            this.frames[keyframe + 1].groups[groupI][curveI][pointI],
+            this.framesSet[keyframe + 1].groups[groupI][curveI][pointI],
             amount
           )
         )
       )
     )
-    this.frames.splice(keyframe + 1, 0, interpKeyframe)
+    this.framesSet.splice(keyframe + 1, 0, interpKeyframe)
     return this
   }
 
@@ -53,22 +53,19 @@ export class Keyframes extends Builder {
     // if (this.keyframes.length == 2) {
     //   this.interpolateFrame(0)
     // }
-    const keyframeCount = this.frames.length
-    const curveCount = this.frames[0].groups.flat().length
+    const keyframeCount = this.framesSet.length
+    const curveCount = this.framesSet[0].groups.flat().length
 
     const controlPointsCount = max(
-      this.frames.flatMap(x => x.groups.flat()).map(x => x.length)
+      this.framesSet.flatMap(x => x.groups.flat().map(x => x.length))
     )!
 
     const subdivisions = controlPointsCount - 2
 
-    const totalCurves = this.frames[0].groups.flat().length
+    const totalCurves = this.framesSet[0].groups.flat().length
     const curveLengths = range(totalCurves).flatMap(() => 0)
-    const createTexture = (
-      getPoint: (point: PointVector) => number[],
-      format: THREE.AnyPixelFormat
-    ) => {
-      this.eachFrame(keyframe => {
+    this.frames(
+      keyframe => {
         keyframe.groups.flat().forEach((curve, j) => {
           // interpolate the bezier curves which are too short
           if (curve.length < controlPointsCount) {
@@ -93,10 +90,16 @@ export class Keyframes extends Builder {
           // We sample each curve according to its maximum keyframe length
           if (length > curveLengths[j]) curveLengths[j] = length
         })
-      })
+      },
+      [0, -1]
+    )
 
+    const createTexture = (
+      getPoint: (point: PointBuilder) => number[],
+      format: THREE.AnyPixelFormat
+    ) => {
       const array = new Float32Array(
-        this.frames.flatMap(keyframe => {
+        this.framesSet.flatMap(keyframe => {
           return keyframe.groups.flatMap(group =>
             group.flatMap(curve => {
               return curve.flatMap(point => {
@@ -120,6 +123,7 @@ export class Keyframes extends Builder {
       tex.needsUpdate = true
       return tex
     }
+    console.log(this.framesSet[0].groups)
 
     const keyframesTex = createTexture(point => {
       return [...point.toArray(), point.strength, 1]
@@ -133,6 +137,8 @@ export class Keyframes extends Builder {
       THREE.RGBAFormat
     )
 
+    console.log(keyframesTex, colorTex)
+
     return {
       keyframesTex,
       colorTex,
@@ -140,5 +146,12 @@ export class Keyframes extends Builder {
       controlPointsCount,
       keyframeCount
     }
+  }
+
+  targetFrames(from: number, to?: number) {
+    if (from < 0) from += this.framesSet.length
+    if (!to) to = from
+    else if (to < 0) to += this.framesSet.length
+    this.targetFramesSet = [from, to]
   }
 }

@@ -2,13 +2,15 @@ import { cloneDeep } from 'lodash'
 import { Canvas2D, Reactive } from '../../src'
 import Asemic from '../../src/asemic/Asemic'
 import Brush from '../../src/asemic/Brush'
-import { Keyframes } from '../../src/asemic/drawingSystem/KeyframeBuilder'
+import { KeyframeBuilder } from '../../src/asemic/drawingSystem/KeyframeBuilder'
 
 export default function ParticlesTest() {
   // abcdefghijklmnopqrstuvwxyz
-  const kf = new Keyframes(g =>
-    g.text('abcdefghijklmnopqrstuvwxyz', { width: 100, origin: [0, 25] })
+  const kf = new KeyframeBuilder(g =>
+    g.text('this is\n a new work of art', { width: 100, origin: [0, 25] })
   )
+    .copy(0)
+    .points(p => p.warp({ origin: [0, 50] }))
 
   return (
     <Reactive progress={t => (t / 2) % 1}>

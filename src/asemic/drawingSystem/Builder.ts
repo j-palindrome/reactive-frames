@@ -11,7 +11,7 @@ type TargetInfo = [number, number] | number
 export default abstract class Builder {
   protected originSet: Vector2 = new Vector2(0, 0)
   protected rotationSet: number = 0
-  protected gridSet: Coordinate = [100, 100]
+  protected gridSet: [number, number] = [100, 100]
   protected scaleSet: Vector2 = new Vector2(1, 1)
   protected matrices: THREE.Matrix3[] = []
   protected targetFramesSet: [number, number] = [0, 0]
@@ -25,6 +25,10 @@ export default abstract class Builder {
   }[] = []
   logEnabled = true
   framesSet: { groups: PointBuilder[][][] }[] = [{ groups: [] }]
+
+  applyGrid(point: Coordinate): Coordinate {
+    return [point[0] * this.scaleSet[0], point[1] * this.scaleSet[1], point[2]]
+  }
 
   constructor() {}
 
@@ -72,8 +76,7 @@ export default abstract class Builder {
       newCurvePoints.push(
         new PointBuilder(
           newCurve.getPointAt(u).toArray() as [number, number],
-          curve,
-          i
+          this
         )
       )
 
@@ -97,7 +100,7 @@ export default abstract class Builder {
     this.log.push({ func, coords, endArgs })
   }
 
-  grid(grid: Coordinate) {
+  grid(grid: [number, number]) {
     this.addToLog('grid', { endArgs: [grid] })
     this.gridSet = grid
   }
@@ -140,10 +143,13 @@ export default abstract class Builder {
   /**
    * translate->scale->rotate
    */
-  protected getRelative(
+  getRelative(
     move: Coordinate,
-    reverseTransforms = false
+    { reverseTransforms = false, applyGrid = false } = {}
   ): Coordinate {
+    if (applyGrid) {
+      this.applyGrid(move)
+    }
     if (move[2]?.mode) {
       // reset transforms when switching modes
       this.modeSet = move[2].mode
@@ -163,7 +169,9 @@ export default abstract class Builder {
       const scaleSave = this.scaleSet.clone()
       this.scaleSet.set(1, 1)
       this.originSet.set(0, 0)
-      const newPoint = this.getRelative(move[2].origin, true)
+      const newPoint = this.getRelative(move[2].origin, {
+        reverseTransforms: true
+      })
       this.originSet.set(newPoint[0], newPoint[1])
       this.modeSet = modeSave
       this.scaleSet.copy(scaleSave)

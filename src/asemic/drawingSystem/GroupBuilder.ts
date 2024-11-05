@@ -4,6 +4,7 @@ import { Vector2 } from 'three'
 import { PointBuilder } from './PointBuilder'
 import Builder from './Builder'
 import { lerp } from 'three/src/math/MathUtils.js'
+import { KeyframeBuilder } from './KeyframeBuilder'
 
 const vector = new Vector2()
 const vector2 = new Vector2()
@@ -43,7 +44,7 @@ export default class GroupBuilder extends Builder {
       curve.push(
         ...points.map(
           (point, i) =>
-            new PointBuilder(point, curve, i + curve.length, {
+            new PointBuilder(point, this, {
               strength: point[2]?.strength
             })
         )
@@ -268,13 +269,6 @@ export default class GroupBuilder extends Builder {
 
     return this
   }
-
-  // private eachFrame(
-  //   callback: (frame: KeyframeData) => void,
-  //   fromTo?: [number, number] | undefined
-  // ) {
-  //   return this
-  // }
 
   letters: Record<string, () => GroupBuilder> = {
     ' ': () => this.push({ origin: [50, 0] }),

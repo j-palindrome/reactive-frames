@@ -10,7 +10,7 @@ import { ChildComponent } from '../blocks/FrameChildComponents'
 import { ChildProps } from '../types'
 import FeedbackTexture, { FeedbackTextureRef } from './FeedbackTexture'
 import { Mesh } from '../frames/CanvasGL'
-import { Keyframes } from './drawingSystem/KeyframeBuilder'
+import { KeyframeBuilder } from './drawingSystem/KeyframeBuilder'
 
 const targetVector = new THREE.Vector2()
 
@@ -35,7 +35,7 @@ export type BrushSettings = {
   includes?: string
   between?: [number, number]
   loop?: boolean
-  keyframes: Keyframes
+  keyframes: KeyframeBuilder
 }
 
 export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {

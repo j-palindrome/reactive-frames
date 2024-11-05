@@ -1,20 +1,18 @@
 import { Vector2 } from 'three'
+import Builder from './Builder'
 const vector = new Vector2()
 const vector2 = new Vector2()
 
 export class PointBuilder extends Vector2 {
-  curve: PointBuilder[]
-  index: number
   strength: number
   color?: [number, number, number]
   alpha?: number
   thickness?: number
-  gridSet?: [number, number]
+  parent: Builder
 
   constructor(
     point: Coordinate = [0, 0],
-    curve: PointBuilder[],
-    index: number,
+    parent: Builder,
     {
       strength = 0,
       color,
@@ -28,56 +26,63 @@ export class PointBuilder extends Vector2 {
     } = {}
   ) {
     super(point[0], point[1])
-    this.curve = curve
-    this.index = index
     this.strength = strength
     this.color = color
     this.alpha = alpha
     this.thickness = thickness
+    this.parent = parent
   }
 
-  twist(from: Coordinate, amount: number) {
+  rotateFrom(from: Coordinate, amount: number) {
+    from = this.parent.getRelative(from)
     this.rotateAround(vector.set(from[0], from[1]), amount * Math.PI * 2)
     return this
   }
 
-  pull(from: Coordinate, to: Coordinate, amount: number) {
+  translateFrom(from: Coordinate, to: Coordinate, amount: number) {
+    from = this.parent.applyGrid(from)
+    to = this.parent.applyGrid(to)
     this.sub(vector.set(from[0], from[1]))
       .lerp(vector2.set(to[0], to[1]), amount)
       .add(vector)
     return this
   }
 
-  stretch(from: Coordinate, to: Coordinate) {
+  scaleFrom(from: Coordinate, by: Coordinate) {
+    from = this.parent.getRelative(from, { applyGrid: true })
+    by = this.parent.applyGrid(by)
     this.sub(vector.set(from[0], from[1]))
-      .multiply(vector2.set(to[0], to[1]))
+      .multiply(vector2.set(by[0], by[1]))
       .add(vector)
     return this
   }
 
   randomize(amount: [number, number] = [1, 1]) {
-    const v = new Vector2(...amount)
-    const ang =
-      (this.index
-        ? this.curve[this.index - 1].angleTo(this)
-        : this.angleTo(this.curve[1])) +
-      0.5 * Math.PI * 2
-    this.add(
-      vector
-        .random()
-        .subScalar(0.5)
-        .multiply(v)
-        .rotateAround({ x: 0, y: 0 }, ang)
-    )
+    const v = vector.set(...(this.parent.applyGrid(amount) as [number, number]))
+    this.add(vector.random().subScalar(0.5).multiply(v))
+    return this
+  }
+
+  warp({
+    origin,
+    scale,
+    rotation
+  }: {
+    origin?: Coordinate
+    scale?: [number, number]
+    rotation?: number
+  }) {
+    const c = this.parent.applyGrid([this.x, this.y])
+    const coord = this.parent.getRelative([
+      c[0],
+      c[1],
+      { origin, scale, rotation }
+    ])
+    this.set(coord[0], coord[1])
     return this
   }
 
   override clone() {
-    return new PointBuilder([this.x, this.y], this.curve, this.index, {
-      strength: this.strength,
-      color: this.color,
-      alpha: this.alpha,
-      thickness: this.thickness
-    }) as this
+    return new PointBuilder([this.x, this.y], this.parent) as this
   }
 }

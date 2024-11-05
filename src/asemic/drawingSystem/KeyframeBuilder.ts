@@ -8,7 +8,7 @@ import Builder from './Builder'
 const vector = new Vector2()
 const vector2 = new Vector2()
 const vector3 = new Vector2()
-export class Keyframes extends Builder {
+export class KeyframeBuilder extends Builder {
   curveCounts: number[]
   defaults = {
     color: [1, 1, 1],
@@ -19,12 +19,18 @@ export class Keyframes extends Builder {
     super()
     const startCurves = generate(new GroupBuilder())
     this.framesSet = startCurves.framesSet
+    // pass the points and point to the new parent
+    for (let frame of this.framesSet) {
+      for (let point of frame.groups.flat().flat()) {
+        point.parent = this
+      }
+    }
     this.targetGroupsSet = [0, this.framesSet[0].groups.length - 1]
     this.targetFramesSet = [0, 0]
     this.curveCounts = this.framesSet[0].groups.map(x => x.length)
   }
 
-  copyFrame(keyframe: number, copyCount: number = 1) {
+  copy(keyframe: number, copyCount: number = 1) {
     if (keyframe < 0) keyframe += this.framesSet.length
     for (let i = 0; i < copyCount; i++) {
       this.framesSet.push(cloneDeep(this.framesSet[keyframe]))
@@ -33,7 +39,7 @@ export class Keyframes extends Builder {
     return this
   }
 
-  interpolateFrame(keyframe: number, amount = 0.5) {
+  interpolate(keyframe: number, amount = 0.5) {
     const interpKeyframe = cloneDeep(this.framesSet[keyframe])
     interpKeyframe.groups.forEach((group, groupI) =>
       group.forEach((x, curveI) =>

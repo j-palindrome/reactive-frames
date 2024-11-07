@@ -4,26 +4,19 @@ import Builder from './drawingSystem/Builder'
 
 declare global {
   type Coordinate =
-    | [
-        number,
-        number,
-        (
-          | {
-              mode?: Builder['modeSet']
-              strength?: number
-              thickness?: number
-              origin?: Coordinate
-              grid?: [number, number]
-              scale?: [number, number]
-              rotation?: number
-              reset?: boolean
-            }
-          | undefined
-        )
-      ]
+    | [number, number, CoordinateData | undefined]
     | [number, number]
-
-  type OpenCoordinate = Coordinate | number
+  type CoordinateData = {
+    mode?: Builder['modeSet']
+    strength?: number
+    thickness?: number
+    origin?: Coordinate
+    translate?: Coordinate
+    scale?: [number, number]
+    rotate?: number
+    reset?: boolean
+    grid?: [number, number]
+  }
 
   type KeyframeData = {
     groups: PointBuilder[][][]

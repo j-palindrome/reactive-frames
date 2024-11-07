@@ -63,21 +63,14 @@ export class PointBuilder extends Vector2 {
     return this
   }
 
-  warp({
-    origin,
-    scale,
-    rotation
-  }: {
-    origin?: Coordinate
-    scale?: [number, number]
-    rotation?: number
-  }) {
+  warp({ translate, origin, scale, rotate }: CoordinateData) {
     const c = this.parent.applyGrid([this.x, this.y])
     const coord = this.parent.getRelative([
       c[0],
       c[1],
-      { origin, scale, rotation }
+      { translate, origin, scale, rotate }
     ])
+
     this.set(coord[0], coord[1])
     return this
   }

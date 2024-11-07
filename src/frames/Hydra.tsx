@@ -21,7 +21,6 @@ const Hydra = (
           hydraRef.current.height = self.height
           hydraRef.current.synth.width = self.width
           hydraRef.current.synth.height = self.height
-          console.log('resized', hydraRef.current)
         }}
       /> */}
       <FrameComponent

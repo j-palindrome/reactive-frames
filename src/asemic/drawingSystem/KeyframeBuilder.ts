@@ -4,16 +4,13 @@ import GroupBuilder from './GroupBuilder'
 import { PointBuilder } from './PointBuilder'
 import * as THREE from 'three'
 import Builder from './Builder'
+import { Jitter } from '../Brush'
 
 const vector = new Vector2()
 const vector2 = new Vector2()
 const vector3 = new Vector2()
 export class KeyframeBuilder extends Builder {
   curveCounts: number[]
-  defaults = {
-    color: [1, 1, 1],
-    alpha: 1
-  }
 
   constructor(generate: (g: GroupBuilder) => GroupBuilder) {
     super()
@@ -30,12 +27,11 @@ export class KeyframeBuilder extends Builder {
     this.curveCounts = this.framesSet[0].groups.map(x => x.length)
   }
 
-  copy(keyframe: number, copyCount: number = 1) {
+  to(warp: CoordinateData, keyframe: number = -1) {
     if (keyframe < 0) keyframe += this.framesSet.length
-    for (let i = 0; i < copyCount; i++) {
-      this.framesSet.push(cloneDeep(this.framesSet[keyframe]))
-    }
+    this.framesSet.push(cloneDeep(this.framesSet[keyframe]))
     this.target(undefined, -1)
+    this.points(p => p.warp(warp))
     return this
   }
 
@@ -55,10 +51,7 @@ export class KeyframeBuilder extends Builder {
     return this
   }
 
-  packToTexture() {
-    // if (this.keyframes.length == 2) {
-    //   this.interpolateFrame(0)
-    // }
+  packToTexture(defaults: Jitter) {
     const keyframeCount = this.framesSet.length
     const curveCount = this.framesSet[0].groups.flat().length
 
@@ -71,7 +64,7 @@ export class KeyframeBuilder extends Builder {
     const totalCurves = this.framesSet[0].groups.flat().length
     const curveLengths = range(totalCurves).flatMap(() => 0)
     this.frames(
-      keyframe => {
+      (keyframe, { keyframeProgress }) => {
         keyframe.groups.flat().forEach((curve, j) => {
           // interpolate the bezier curves which are too short
           if (curve.length < controlPointsCount) {
@@ -129,7 +122,6 @@ export class KeyframeBuilder extends Builder {
       tex.needsUpdate = true
       return tex
     }
-    console.log(this.framesSet[0].groups)
 
     const keyframesTex = createTexture(point => {
       return [...point.toArray(), point.strength, 1]
@@ -137,17 +129,21 @@ export class KeyframeBuilder extends Builder {
 
     const colorTex = createTexture(
       point => [
-        ...(point.color ?? this.defaults.color),
-        point.alpha ?? this.defaults.alpha
+        ...(point.color ?? defaults.hsl!.map(x => x / this.gridSet[0])),
+        point.alpha ?? defaults.a! / this.gridSet[0]
       ],
       THREE.RGBAFormat
     )
 
-    console.log(keyframesTex, colorTex)
+    const thicknessTex = createTexture(
+      point => [point.thickness ?? 1],
+      THREE.RedFormat
+    )
 
     return {
       keyframesTex,
       colorTex,
+      thicknessTex,
       curveLengths,
       controlPointsCount,
       keyframeCount

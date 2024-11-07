@@ -3,14 +3,18 @@ import { PointBuilder } from './PointBuilder'
 import * as THREE from 'three'
 import { Vector2 } from 'three'
 import { lerp } from 'three/src/math/MathUtils.js'
-import { e } from 'mathjs'
+import { e, modeDependencies } from 'mathjs'
+import invariant from 'tiny-invariant'
 
 const vector = new THREE.Vector2()
 const vector2 = new THREE.Vector2()
+const relativeVector = new THREE.Vector2()
+const relativeVector2 = new THREE.Vector2()
 type TargetInfo = [number, number] | number
 export default abstract class Builder {
+  protected translateSet: Vector2 = new Vector2(0, 0)
+  protected rotateSet: number = 0
   protected originSet: Vector2 = new Vector2(0, 0)
-  protected rotationSet: number = 0
   protected gridSet: [number, number] = [100, 100]
   protected scaleSet: Vector2 = new Vector2(1, 1)
   protected matrices: THREE.Matrix3[] = []
@@ -20,14 +24,14 @@ export default abstract class Builder {
     'absolute'
   log: {
     func: string
-    coords?: (OpenCoordinate | Coordinate[])[]
+    coords?: (Coordinate | Coordinate[])[]
     endArgs?: any[]
   }[] = []
   logEnabled = true
   framesSet: { groups: PointBuilder[][][] }[] = [{ groups: [] }]
 
   applyGrid(point: Coordinate): Coordinate {
-    return [point[0] * this.scaleSet[0], point[1] * this.scaleSet[1], point[2]]
+    return [point[0] * this.gridSet[0], point[1] * this.gridSet[1], point[2]]
   }
 
   constructor() {}
@@ -64,12 +68,14 @@ export default abstract class Builder {
         )
       }
     }
+
     // @ts-ignore
     return path
   }
 
   interpolateCurve(curve: PointBuilder[], controlPointsCount: number) {
     const newCurve = this.makeCurvePath(curve)
+
     const newCurvePoints: PointBuilder[] = []
     for (let i = 0; i < controlPointsCount; i++) {
       const u = i / (controlPointsCount - 1)
@@ -133,9 +139,9 @@ export default abstract class Builder {
   }
 
   protected clearTransforms() {
-    this.originSet.set(0, 0)
+    this.translateSet.set(0, 0)
     this.scaleSet.set(1, 1)
-    this.rotationSet = 0
+    this.rotateSet = 0
     this.modeSet = 'absolute'
   }
 
@@ -145,42 +151,70 @@ export default abstract class Builder {
    */
   getRelative(
     move: Coordinate,
-    { reverseTransforms = false, applyGrid = false } = {}
-  ): Coordinate {
-    if (applyGrid) {
+    {
+      reverseMatrices = false,
+      applyGrid: applyGridToInput = false,
+      skipTransforms = false,
+      applyGridToOutput = false
+    } = {}
+  ): [number, number] {
+    if (applyGridToInput) {
       this.applyGrid(move)
+    }
+    let modeSave: Builder['modeSet'] | undefined = undefined,
+      scaleSave: Vector2 | undefined = undefined,
+      translateSave: Vector2 | undefined = undefined,
+      originSave: Vector2 | undefined = undefined,
+      rotateSave: number | undefined = undefined
+    if (skipTransforms) {
+      modeSave = this.modeSet
+      scaleSave = this.scaleSet.clone()
+      rotateSave = this.rotateSet
+      translateSave = this.translateSet.clone()
+      originSave = this.originSet.clone()
+      this.scaleSet.set(1, 1)
+      this.translateSet.set(0, 0)
+      this.originSet.set(0, 0)
+      this.rotateSet = 0
+      this.modeSet = 'absolute'
     }
     if (move[2]?.mode) {
       // reset transforms when switching modes
       this.modeSet = move[2].mode
       if (move[2]?.reset !== false) {
-        this.originSet.set(0, 0)
+        this.translateSet.set(0, 0)
         this.scaleSet.set(1, 1)
-        this.rotationSet = 0
+        this.rotateSet = 0
       }
     }
     if (move[2]?.reset) {
-      this.originSet.set(0, 0)
+      this.translateSet.set(0, 0)
       this.scaleSet.set(1, 1)
-      this.rotationSet = 0
-    }
-    if (move[2]?.origin) {
-      const modeSave = this.modeSet
-      const scaleSave = this.scaleSet.clone()
-      this.scaleSet.set(1, 1)
+      this.rotateSet = 0
       this.originSet.set(0, 0)
-      const newPoint = this.getRelative(move[2].origin, {
-        reverseTransforms: true
-      })
-      this.originSet.set(newPoint[0], newPoint[1])
-      this.modeSet = modeSave
-      this.scaleSet.copy(scaleSave)
     }
     if (move[2]?.grid) {
       this.gridSet = move[2].grid
     }
-    if (move[2]?.rotation) {
-      this.rotationSet = move[2].rotation * Math.PI * 2
+
+    if (move[2]?.origin) {
+      const newPoint = this.getRelative(move[2].origin, {
+        reverseMatrices: true,
+        skipTransforms: true
+      })
+      this.originSet.set(newPoint[0], newPoint[1])
+    }
+
+    if (move[2]?.translate) {
+      const newPoint = this.getRelative(move[2].translate, {
+        reverseMatrices: true,
+        skipTransforms: true
+      })
+      this.translateSet.set(newPoint[0], newPoint[1])
+    }
+
+    if (move[2]?.rotate) {
+      this.rotateSet = (move[2].rotate / this.gridSet[0]) * Math.PI * 2
     }
     if (move[2]?.scale) {
       this.scaleSet.set(
@@ -193,55 +227,60 @@ export default abstract class Builder {
 
     switch (this.modeSet) {
       case 'absolute':
-        vector
+        relativeVector
           .set(gridMove[0], gridMove[1])
+          .sub(this.originSet)
           .multiply(this.scaleSet)
+          .rotateAround({ x: 0, y: 0 }, this.rotateSet)
+          .add(this.translateSet)
           .add(this.originSet)
-          .rotateAround(this.originSet, this.rotationSet)
 
-        if (!reverseTransforms) {
+        if (!reverseMatrices) {
           for (let matrix of this.matrices) {
-            vector.applyMatrix3(matrix)
+            relativeVector.applyMatrix3(matrix)
           }
         }
         break
       case 'relative':
-        vector
+        relativeVector
           .set(gridMove[0], gridMove[1])
+          .sub(this.originSet)
           .multiply(this.scaleSet)
+          .rotateAround({ x: 0, y: 0 }, this.rotateSet)
+          .add(this.translateSet)
           .add(this.originSet)
-          .rotateAround(this.originSet, this.rotationSet)
           .add(this.lastPoint)
         break
       case 'polar':
-        vector
+        relativeVector
           .set(gridMove[0], 0)
+          .sub(this.originSet)
           .rotateAround(
-            {
-              x: 0,
-              y: 0
-            },
-            gridMove[1] * Math.PI * 2 + this.rotationSet
+            { x: 0, y: 0 },
+            gridMove[1] * Math.PI * 2 + this.rotateSet
           )
           .multiply(this.scaleSet)
+          .add(this.translateSet)
           .add(this.originSet)
           .add(this.lastPoint)
 
         break
       case 'steer':
         const pointBefore = this.getLastPoint(-2)
-        vector
+        relativeVector
           .set(gridMove[0], 0)
+          .sub(this.originSet)
           .rotateAround(
             {
               x: 0,
               y: 0
             },
             gridMove[1] * Math.PI * 2 +
-              this.rotationSet +
-              vector2.copy(this.lastPoint).sub(pointBefore).angle()
+              this.rotateSet +
+              relativeVector2.copy(this.lastPoint).sub(pointBefore).angle()
           )
           .multiply(this.scaleSet)
+          .add(this.translateSet)
           .add(this.originSet)
           .add(this.lastPoint)
         break
@@ -256,27 +295,47 @@ export default abstract class Builder {
         )
 
         const pathPoint = curvePath.getPointAt(gridMove[0])
-        if (reverseTransforms) {
+        if (reverseMatrices) {
           // we revert the matrix transformations to get what you would pass into this function to get this point as output.
           for (let i = this.matrices.length - 1; i >= 0; i--) {
             pathPoint.applyMatrix3(this.matrices[i].clone().invert())
           }
         }
 
-        vector
+        relativeVector
           .copy(pathPoint)
           .sub(this.originSet)
           .multiply(this.scaleSet)
+          .rotateAround({ x: 0, y: 0 }, this.rotateSet)
+          .add(this.translateSet)
           .add(this.originSet)
-          .add(this.originSet)
-          .rotateAround(this.originSet, this.rotationSet)
         break
     }
 
-    const point = vector.toArray()
+    const point = relativeVector.toArray()
+
+    if (skipTransforms) {
+      invariant(
+        modeSave &&
+          scaleSave &&
+          translateSave &&
+          originSave &&
+          rotateSave !== undefined
+      )
+      this.modeSet = modeSave
+      this.scaleSet.copy(scaleSave)
+      this.translateSet.copy(translateSave)
+      this.originSet.copy(originSave)
+      this.rotateSet = rotateSave
+    }
 
     this.lastPoint.set(point[0], point[1])
-    return [this.lastPoint.x, this.lastPoint.y, move[2]]
+    return applyGridToOutput
+      ? (this.applyGrid([this.lastPoint.x, this.lastPoint.y]) as [
+          number,
+          number
+        ])
+      : [this.lastPoint.x, this.lastPoint.y]
   }
 
   protected getLastPoint(index: number = -1): PointBuilder {
@@ -308,47 +367,207 @@ export default abstract class Builder {
     }
   }
 
+  protected toCurve(points: Coordinate[], { getRelative = false } = {}) {
+    return points.map(
+      point =>
+        new PointBuilder(getRelative ? this.getRelative(point) : point, this, {
+          strength: point[2]?.strength
+        })
+    )
+  }
+
+  getBounds(points: PointBuilder[], { applyGrid = true } = {}) {
+    const flatX = points.map(x => x.x * (applyGrid ? this.gridSet[0] : 1))
+    const flatY = points.map(y => y.y * (applyGrid ? this.gridSet[1] : 1))
+    const minCoord: Coordinate = [min(flatX)!, min(flatY)!]
+    const maxCoord: Coordinate = [max(flatX)!, max(flatY)!]
+    return {
+      min: minCoord,
+      max: maxCoord,
+      size: [maxCoord[0] - minCoord[0], maxCoord[1] - minCoord[1]] as Coordinate
+    }
+  }
+
+  along(points: Coordinate[]) {
+    const curve = this.makeCurvePath(
+      this.toCurve(points, { getRelative: true })
+    )
+    return this.groups((g, { groupProgress }) => {
+      const curveProgress = curve.getPointAt(groupProgress)
+      const { min } = this.getBounds(g.flat(), { applyGrid: false })
+      g.flat().forEach(p => {
+        p.add({ x: curveProgress.x - min[0], y: curveProgress.y - min[1] })
+      })
+    })
+  }
+
+  randomize(
+    {
+      translate,
+      rotate,
+      scale,
+      origin
+    }: {
+      translate?: [Coordinate, Coordinate]
+      rotate?: [number, number]
+      scale?: [Coordinate, Coordinate]
+      origin?: Coordinate
+    },
+    groups: TargetInfo = [0, -1],
+    frames?: TargetInfo
+  ) {
+    this.groups(
+      (g, { bounds }) => {
+        let translatePoint: Coordinate = !translate
+          ? [0, 0]
+          : this.applyGrid(
+              vector
+                .set(...this.getRelative(translate[0]))
+                .lerp(
+                  vector2.set(...this.getRelative(translate[1])),
+                  Math.random()
+                )
+                .toArray()
+            )
+        let rotatePoint: number = rotate
+          ? lerp(
+              rotate[0] * this.gridSet[0],
+              rotate[1] * this.gridSet[0],
+              Math.random()
+            )
+          : 0
+        let scalePoint = this.applyGrid(
+          !scale
+            ? [1, 1]
+            : vector
+                .set(...this.getRelative(scale[0]))
+                .lerp(vector2.set(...this.getRelative(scale[1])), Math.random())
+                .toArray()
+        ) as [number, number]
+        const originPoint = !origin ? [0, 0] : this.getRelative(origin)
+
+        g.flat().forEach(p =>
+          p.warp({
+            translate: translatePoint,
+            rotate: rotatePoint,
+            scale: scalePoint,
+            origin: [
+              bounds.min[0] + originPoint[0],
+              bounds.min[1] + originPoint[1]
+            ]
+          })
+        )
+      },
+      groups,
+      frames
+    )
+    return this
+  }
+
   points(
-    callback: (point: PointBuilder) => void,
+    callback: (
+      point: PointBuilder,
+      {
+        keyframeProgress,
+        groupProgress,
+        curveProgress,
+        pointProgress
+      }: {
+        keyframeProgress: number
+        groupProgress: number
+        curveProgress: number
+        pointProgress: number
+      }
+    ) => void,
     groups?: TargetInfo,
     frames?: TargetInfo
   ) {
     this.target(groups, frames)
-    return this.groups(group => {
-      group.forEach(curve => curve.forEach(point => callback(point)))
-    })
+    return this.curves(
+      (curve, { keyframeProgress, groupProgress, curveProgress }) => {
+        curve.forEach((point, i) =>
+          callback(point, {
+            keyframeProgress,
+            groupProgress,
+            curveProgress,
+            pointProgress: i / curve.length
+          })
+        )
+      }
+    )
   }
 
   curves(
-    callback: (curve: PointBuilder[]) => void,
+    callback: (
+      curve: PointBuilder[],
+      {
+        keyframeProgress,
+        groupProgress
+      }: {
+        keyframeProgress: number
+        groupProgress: number
+        curveProgress: number
+        bounds: ReturnType<Builder['getBounds']>
+      }
+    ) => void,
     groups?: [number, number] | number,
     frames?: [number, number] | number
   ) {
     this.target(groups, frames)
-    return this.frames(frame => {
-      for (let i = this.targetGroupsSet[0]; i <= this.targetGroupsSet[1]; i++) {
-        frame.groups[i].forEach(curve => callback(curve))
-      }
+    return this.groups((group, { keyframeProgress, groupProgress }) => {
+      group.forEach((curve, i) =>
+        callback(curve, {
+          keyframeProgress,
+          groupProgress,
+          curveProgress: i / group.length,
+          bounds: this.getBounds(curve)
+        })
+      )
     })
   }
 
   groups(
-    callback: (group: PointBuilder[][]) => void,
+    callback: (
+      group: PointBuilder[][],
+      {
+        keyframeProgress,
+        groupProgress,
+        bounds
+      }: {
+        groupProgress: number
+        keyframeProgress: number
+        bounds: ReturnType<Builder['getBounds']>
+      }
+    ) => void,
     groups?: [number, number] | number,
     frames?: [number, number] | number
   ) {
     this.target(groups, frames)
-    return this.frames(frame => {
+    const groupCount = this.framesSet[0].groups.length
+
+    return this.frames((frame, { keyframeProgress }) => {
       for (let i = this.targetGroupsSet[0]; i <= this.targetGroupsSet[1]; i++) {
-        callback(frame.groups[i])
+        callback(frame.groups[i], {
+          groupProgress: i / groupCount,
+          keyframeProgress,
+          bounds: this.getBounds(frame.groups[i].flat())
+        })
       }
     })
   }
 
-  frames(callback: (frame: KeyframeData) => void, frames?: TargetInfo) {
+  frames(
+    callback: (
+      frame: KeyframeData,
+      { keyframeProgress }: { keyframeProgress: number }
+    ) => void,
+    frames?: TargetInfo
+  ) {
     this.target(undefined, frames)
     for (let i = this.targetFramesSet[0]; i <= this.targetFramesSet[1]; i++) {
-      callback(this.framesSet[i])
+      callback(this.framesSet[i], {
+        keyframeProgress: i / this.framesSet.length
+      })
     }
     return this
   }

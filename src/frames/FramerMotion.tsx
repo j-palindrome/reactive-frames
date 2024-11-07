@@ -58,10 +58,8 @@ const FramerSequence = (props: ParentProps<{ className?: string }, {}>) => {
               ]
               return sequence
             })
-            console.log(sequence)
 
             animControls.current = animate(sequence)
-            console.log(animControls.current)
 
             animControls.current.pause()
             animControls.current.time = scrollYProgress.get()

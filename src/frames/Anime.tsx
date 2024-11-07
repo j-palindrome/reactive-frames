@@ -56,7 +56,6 @@ const Anime = (
   scrollYProgress.on('change', y => {
     if (!animControls.current) return
     animControls.current.seek(y * animControls.current.duration)
-    console.log(y * animControls.current.duration)
   })
 
   return (

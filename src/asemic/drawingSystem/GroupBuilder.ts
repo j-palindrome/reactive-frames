@@ -41,14 +41,7 @@ export default class GroupBuilder extends Builder {
 
   private addToCurve(points: Coordinate[]) {
     return this.lastCurve(curve => {
-      curve.push(
-        ...points.map(
-          (point, i) =>
-            new PointBuilder(point, this, {
-              strength: point[2]?.strength
-            })
-        )
-      )
+      curve.push(...this.toCurve(points))
       this.lastPoint.set(last(points)![0], last(points)![1])
     })
   }
@@ -78,7 +71,6 @@ export default class GroupBuilder extends Builder {
   arc(centerPoint: Coordinate, amount: number) {
     this.addToLog('arc', { coords: [centerPoint], endArgs: [amount] })
     centerPoint = this.getRelative(centerPoint)
-    console.log(centerPoint)
 
     return this.lastCurve(curve => {
       const lastPoint = last(curve)!
@@ -330,7 +322,7 @@ export default class GroupBuilder extends Builder {
             50,
             0,
             {
-              origin: [0, -100, { mode: 'absolute' }],
+              translate: [0, -100, { mode: 'absolute' }],
               mode: 'intersect'
             }
           ],
@@ -356,7 +348,7 @@ export default class GroupBuilder extends Builder {
         .push({ origin: [10, 0] }),
     j: () =>
       this.push({ origin: [-25, 0] })
-        .new([51, 76, { origin: [0, -40], scale: [100, 120] }], true)
+        .new([51, 76, { translate: [0, -40], scale: [100, 120] }], true)
         .arc([-1, -1, { mode: 'relative' }], 1)
         .new([-1, -10])
         .addPoints([10, -60], [-30, 0], [0, 15])
@@ -368,11 +360,11 @@ export default class GroupBuilder extends Builder {
         .new([
           30,
           30,
-          { mode: 'absolute', origin: [50, -1, { mode: 'intersect' }] }
+          { mode: 'absolute', translate: [50, -1, { mode: 'intersect' }] }
         ])
         .addPoints(
           [0, 0, { strength: 1, mode: 'absolute', reset: false }],
-          [50, 0, { origin: [100, -2, { mode: 'intersect' }] }]
+          [50, 0, { translate: [100, -2, { mode: 'intersect' }] }]
         )
         .debug()
         .within([0, 0, { reset: true }], [50, 100])
@@ -390,7 +382,7 @@ export default class GroupBuilder extends Builder {
           0,
           {
             mode: 'absolute',
-            origin: [10, 10],
+            translate: [10, 10],
             scale: [40, 40]
           }
         ],
@@ -402,7 +394,7 @@ export default class GroupBuilder extends Builder {
           0,
           {
             mode: 'absolute',
-            origin: [100, -1, { mode: 'intersect' }],
+            translate: [100, -1, { mode: 'intersect' }],
             scale: [40, 40]
           }
         ])
@@ -417,7 +409,7 @@ export default class GroupBuilder extends Builder {
             100,
             {
               mode: 'absolute',
-              origin: [70, 10],
+              translate: [70, 10],
               scale: [-40, 40]
             }
           ],
@@ -425,10 +417,10 @@ export default class GroupBuilder extends Builder {
           [100, 40],
           [100, 0]
         )
-        .within([0, 0, { origin: [0, 0], scale: [100, 100] }], [50, 50])
+        .within([0, 0, { translate: [0, 0], scale: [100, 100] }], [50, 50])
         .push({ origin: [50, 0] }),
     o: () =>
-      this.new([20, 20, { mode: 'absolute', origin: [50, 50] }], true)
+      this.new([20, 20, { mode: 'absolute', translate: [50, 50] }], true)
         .arc([0, 0], 1)
         .within([0, 0, { reset: true }], [50, 50])
         .push({ origin: [50, 0] }),
@@ -437,10 +429,10 @@ export default class GroupBuilder extends Builder {
         .line([0, -70, { mode: 'relative' }])
         .new([10, -1, { mode: 'intersect' }])
         .curve([0, -30, { mode: 'relative' }], [-40, 100], [140, 100])
-        .within([0, -50, { mode: 'absolute', origin: [0, 10] }], [50, 50])
+        .within([0, -50, { mode: 'absolute', translate: [0, 10] }], [50, 50])
         .push({ origin: [50, 0] }),
     q: () =>
-      this.new([50, 80, { scale: [100, 130], origin: [0, -40] }], true)
+      this.new([50, 80, { scale: [100, 130], translate: [0, -40] }], true)
         .line([0, -80, { mode: 'relative', strength: 1 }])
         .addPoints([30, 12, { mode: 'polar' }])
         .new([5, -1, { mode: 'intersect' }])
@@ -462,7 +454,7 @@ export default class GroupBuilder extends Builder {
         .push({ origin: [50, 0] }),
     t: () =>
       this.push({ origin: [-15, 0] })
-        .new([50, 100, { origin: [0, 10] }], true)
+        .new([50, 100, { translate: [0, 10] }], true)
         .line([50, 0])
         .new([30, -1, { mode: 'intersect' }])
         .line([40, 0, { mode: 'relative' }])
@@ -480,7 +472,7 @@ export default class GroupBuilder extends Builder {
         .within([0, 0, { mode: 'absolute' }], [50, 50])
         .push({ origin: [50, 0] }),
     w: () =>
-      this.new([0, 50, { scale: [80, 170], origin: [0, -25] }], true)
+      this.new([0, 50, { scale: [80, 170], translate: [0, -25] }], true)
         .addPoints(
           [25, 0, { strength: 1 }],
           [50, 50, { strength: 1 }],
@@ -490,14 +482,14 @@ export default class GroupBuilder extends Builder {
         .within([0, 0, { reset: true }], [100, 50])
         .push({ origin: [100, 0] }),
     x: () =>
-      this.new([0, 0, { scale: [50, 60], origin: [0, 0] }], true)
+      this.new([0, 0, { scale: [50, 60], translate: [0, 0] }], true)
         .line([100, 100])
         .new([0, 100])
         .line([100, 0])
         .within([0, 0, { reset: true }], [50, 50])
         .push({ origin: [50, 0] }),
     y: () =>
-      this.new([0, 0, { scale: [50, 120], origin: [0, -60] }], true)
+      this.new([0, 0, { scale: [50, 120], translate: [0, -60] }], true)
         .line([100, 100])
         .new([0, 100])
         .line([50, 50])

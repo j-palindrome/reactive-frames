@@ -21,7 +21,7 @@ export default class GroupBuilder extends Builder {
 
   lastCurve(callback: (curve: PointBuilder[]) => void) {
     return this.groups(group => {
-      callback(group[group.length - 1])
+      callback(group.curves[group.curves.length - 1])
     })
   }
 
@@ -48,20 +48,20 @@ export default class GroupBuilder extends Builder {
 
   new(origin: Coordinate, newGroup: boolean = false) {
     if (newGroup) {
-      this.framesSet[0].groups.push([])
+      this.framesSet[0].groups.push({ curves: [], transform: {} })
       this.target(-1)
       this.clearTransforms()
     }
     this.addToLog('new', { coords: [origin], endArgs: [newGroup] })
     origin = this.getRelative(origin)
-    this.framesSet[0].groups[this.targetGroupsSet[0]].push([])
+    this.framesSet[0].groups[this.targetGroupsSet[0]].curves.push([])
     this.addToCurve([origin])
     return this
   }
 
   getPoint(curve: number, point: number): PointBuilder {
     if (curve < 0)
-      curve += this.framesSet[0].groups[this.targetGroupsSet[0]].length
+      curve += this.framesSet[0].groups[this.targetGroupsSet[0]].curves.length
     if (point < 0)
       point += this.framesSet[0].groups[this.targetGroupsSet[0]][curve].length
     const p = this.framesSet[0].groups[this.targetGroupsSet[0]][curve][point]!
@@ -219,7 +219,7 @@ export default class GroupBuilder extends Builder {
 
   protected getLastPoint(index: number = -1): PointBuilder {
     const lastGroup = this.framesSet[0].groups[this.targetGroupsSet[0]]
-    const lastCurve = lastGroup[lastGroup.length - 1]
+    const lastCurve = lastGroup[lastGroup.curves.length - 1]
     return lastCurve[lastCurve.length + index]
   }
 
@@ -243,10 +243,15 @@ export default class GroupBuilder extends Builder {
       }
     }
 
-    const maxX = max(this.framesSet[0].groups.flat(2).map(x => x.x))
+    const maxX = max(
+      this.framesSet[0].groups
+        .flatMap(x => x.curves)
+        .flat()
+        .map(x => x.x)
+    )
     this.groups(
       group =>
-        group
+        group.curves
           .flat()
           .forEach(point =>
             point

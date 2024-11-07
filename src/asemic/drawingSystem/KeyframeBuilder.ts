@@ -18,13 +18,13 @@ export class KeyframeBuilder extends Builder {
     this.framesSet = startCurves.framesSet
     // pass the points and point to the new parent
     for (let frame of this.framesSet) {
-      for (let point of frame.groups.flat().flat()) {
+      for (let point of frame.groups.map(x => x.curves.flat()).flat()) {
         point.parent = this
       }
     }
     this.targetGroupsSet = [0, this.framesSet[0].groups.length - 1]
     this.targetFramesSet = [0, 0]
-    this.curveCounts = this.framesSet[0].groups.map(x => x.length)
+    this.curveCounts = this.framesSet[0].groups.map(x => x.curves.length)
   }
 
   to(warp: CoordinateData, keyframe: number = -1) {
@@ -38,7 +38,7 @@ export class KeyframeBuilder extends Builder {
   interpolate(keyframe: number, amount = 0.5) {
     const interpKeyframe = cloneDeep(this.framesSet[keyframe])
     interpKeyframe.groups.forEach((group, groupI) =>
-      group.forEach((x, curveI) =>
+      group.curves.forEach((x, curveI) =>
         x.forEach((point, pointI) =>
           point.lerp(
             this.framesSet[keyframe + 1].groups[groupI][curveI][pointI],
@@ -53,56 +53,60 @@ export class KeyframeBuilder extends Builder {
 
   packToTexture(defaults: Jitter) {
     const keyframeCount = this.framesSet.length
-    const curveCount = this.framesSet[0].groups.flat().length
+    const curveCounts = this.framesSet[0].groups.flatMap(x => x.curves).length
 
     const controlPointsCount = max(
-      this.framesSet.flatMap(x => x.groups.flat().map(x => x.length))
+      this.framesSet.flatMap(x =>
+        x.groups.flatMap(x => x.curves.flatMap(x => x.length))
+      )
     )!
 
     const subdivisions = controlPointsCount - 2
 
-    const totalCurves = this.framesSet[0].groups.flat().length
+    const totalCurves = this.framesSet[0].groups.flatMap(x => x.curves).length
     const curveLengths = range(totalCurves).flatMap(() => 0)
     this.frames(
-      (keyframe, { keyframeProgress }) => {
-        keyframe.groups.flat().forEach((curve, j) => {
-          // interpolate the bezier curves which are too short
-          if (curve.length < controlPointsCount) {
-            this.interpolateCurve(curve, controlPointsCount)
-          }
+      keyframe => {
+        keyframe.groups
+          .flatMap(x => x.curves)
+          .forEach((curve, j) => {
+            // interpolate the bezier curves which are too short
+            if (curve.length < controlPointsCount) {
+              this.interpolateCurve(curve, controlPointsCount)
+            }
 
-          const curvePath = new THREE.CurvePath()
-          const segments: THREE.Curve<Vector2>[] = []
-          range(subdivisions).forEach(i => {
-            const thisCurve = new THREE.QuadraticBezierCurve(
-              i === 0 ? curve[i] : curve[i].clone().lerp(curve[i + 1], 0.5),
-              curve[i + 1],
-              i === subdivisions - 1
-                ? curve[i + 2]
-                : curve[i + 1].clone().lerp(curve[i + 2], 0.5)
-            )
-            curvePath.add(thisCurve)
-            segments.push(thisCurve)
+            const curvePath = new THREE.CurvePath()
+            const segments: THREE.Curve<Vector2>[] = []
+            range(subdivisions).forEach(i => {
+              const thisCurve = new THREE.QuadraticBezierCurve(
+                i === 0 ? curve[i] : curve[i].clone().lerp(curve[i + 1], 0.5),
+                curve[i + 1],
+                i === subdivisions - 1
+                  ? curve[i + 2]
+                  : curve[i + 1].clone().lerp(curve[i + 2], 0.5)
+              )
+              curvePath.add(thisCurve)
+              segments.push(thisCurve)
+            })
+
+            const length = curvePath.getLength()
+            // We sample each curve according to its maximum keyframe length
+            if (length > curveLengths[j]) curveLengths[j] = length
           })
-
-          const length = curvePath.getLength()
-          // We sample each curve according to its maximum keyframe length
-          if (length > curveLengths[j]) curveLengths[j] = length
-        })
       },
       [0, -1]
     )
 
     const createTexture = (
-      getPoint: (point: PointBuilder) => number[],
+      getPoint: (point: PointBuilder, group: GroupData) => number[],
       format: THREE.AnyPixelFormat
     ) => {
       const array = new Float32Array(
         this.framesSet.flatMap(keyframe => {
           return keyframe.groups.flatMap(group =>
-            group.flatMap(curve => {
+            group.curves.flatMap(curve => {
               return curve.flatMap(point => {
-                return getPoint(point)
+                return getPoint(point, group)
               })
             })
           )
@@ -112,7 +116,7 @@ export class KeyframeBuilder extends Builder {
       const tex = new Data3DTexture(
         array,
         controlPointsCount,
-        curveCount,
+        curveCounts,
         keyframeCount
       )
       tex.format = format

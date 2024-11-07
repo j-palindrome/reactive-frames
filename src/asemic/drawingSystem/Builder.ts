@@ -28,7 +28,10 @@ export default abstract class Builder {
     endArgs?: any[]
   }[] = []
   logEnabled = true
-  framesSet: { groups: PointBuilder[][][] }[] = [{ groups: [] }]
+  framesSet: {
+    groups: GroupData[]
+    transform: TransformData
+  }[] = [{ groups: [], transform: {} }]
 
   applyGrid(point: Coordinate): Coordinate {
     return [point[0] * this.gridSet[0], point[1] * this.gridSet[1], point[2]]
@@ -287,11 +290,12 @@ export default abstract class Builder {
       case 'intersect':
         move[1] =
           move[1] < 0
-            ? move[1] + this.framesSet[0].groups[this.targetGroupsSet[0]].length
+            ? move[1] +
+              this.framesSet[0].groups[this.targetGroupsSet[0]].curves.length
             : move[1]
 
         const curvePath: THREE.CurvePath<Vector2> = this.makeCurvePath(
-          this.framesSet[0].groups[this.targetGroupsSet[0]][move[1]]
+          this.framesSet[0].groups[this.targetGroupsSet[0]].curves[move[1]]
         )
 
         const pathPoint = curvePath.getPointAt(gridMove[0])
@@ -394,8 +398,8 @@ export default abstract class Builder {
     )
     return this.groups((g, { groupProgress }) => {
       const curveProgress = curve.getPointAt(groupProgress)
-      const { min } = this.getBounds(g.flat(), { applyGrid: false })
-      g.flat().forEach(p => {
+      const { min } = this.getBounds(g.curves.flat(), { applyGrid: false })
+      g.curves.flat().forEach(p => {
         p.add({ x: curveProgress.x - min[0], y: curveProgress.y - min[1] })
       })
     })
@@ -446,7 +450,7 @@ export default abstract class Builder {
         ) as [number, number]
         const originPoint = !origin ? [0, 0] : this.getRelative(origin)
 
-        g.flat().forEach(p =>
+        g.curves.flat().forEach(p =>
           p.warp({
             translate: translatePoint,
             rotate: rotatePoint,
@@ -515,11 +519,11 @@ export default abstract class Builder {
   ) {
     this.target(groups, frames)
     return this.groups((group, { keyframeProgress, groupProgress }) => {
-      group.forEach((curve, i) =>
+      group.curves.forEach((curve, i) =>
         callback(curve, {
           keyframeProgress,
           groupProgress,
-          curveProgress: i / group.length,
+          curveProgress: i / group.curves.length,
           bounds: this.getBounds(curve)
         })
       )
@@ -528,7 +532,7 @@ export default abstract class Builder {
 
   groups(
     callback: (
-      group: PointBuilder[][],
+      group: GroupData,
       {
         keyframeProgress,
         groupProgress,
@@ -550,7 +554,7 @@ export default abstract class Builder {
         callback(frame.groups[i], {
           groupProgress: i / groupCount,
           keyframeProgress,
-          bounds: this.getBounds(frame.groups[i].flat())
+          bounds: this.getBounds(frame.groups[i].curves.flat())
         })
       }
     })
@@ -558,7 +562,7 @@ export default abstract class Builder {
 
   frames(
     callback: (
-      frame: KeyframeData,
+      frame: Builder['framesSet'][number],
       { keyframeProgress }: { keyframeProgress: number }
     ) => void,
     frames?: TargetInfo
@@ -580,7 +584,7 @@ export default abstract class Builder {
           x.groups
             .slice(this.targetGroupsSet[0], this.targetGroupsSet[1] + 1)
             .map(g =>
-              g
+              g.curves
                 .map(c =>
                   c
                     .map(
@@ -608,8 +612,8 @@ export default abstract class Builder {
     { target = [0, -1] }: { target?: [number, number] } = {}
   ) {
     const tGroup = this.framesSet[0].groups[this.targetGroupsSet[0]]
-    const xMap = tGroup.flat().map(x => x.x)
-    const yMap = tGroup.flat().map(y => y.y)
+    const xMap = tGroup.curves.flat().map(x => x.x)
+    const yMap = tGroup.curves.flat().map(y => y.y)
     const minVector = new Vector2(min(xMap)!, min(yMap)!)
     const maxVector = new Vector2(max(xMap)!, max(yMap)!)
 

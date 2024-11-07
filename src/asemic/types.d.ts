@@ -6,22 +6,19 @@ declare global {
   type Coordinate =
     | [number, number, CoordinateData | undefined]
     | [number, number]
-  type CoordinateData = {
-    mode?: Builder['modeSet']
-    strength?: number
-    thickness?: number
+
+  type TransformData = {
     origin?: Coordinate
     translate?: Coordinate
     scale?: [number, number]
     rotate?: number
+  }
+  type CoordinateData = TransformData & {
+    mode?: Builder['modeSet']
+    strength?: number
+    thickness?: number
     reset?: boolean
     grid?: [number, number]
   }
-
-  type KeyframeData = {
-    groups: PointBuilder[][][]
-    position?: Vector2
-    scale?: Vector2
-    rotation?: number
-  }
+  type GroupData = { curves: PointBuilder[][]; transform: TransformData }
 }

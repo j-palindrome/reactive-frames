@@ -85,7 +85,6 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
     colorTex,
     thicknessTex
   } = keyframes.packToTexture(defaults)
-  console.log(colorTex, thicknessTex)
 
   const resolution = useThree(state =>
     state.gl.getDrawingBufferSize(targetVector)

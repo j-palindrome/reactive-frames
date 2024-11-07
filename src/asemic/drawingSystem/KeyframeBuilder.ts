@@ -63,13 +63,13 @@ export class KeyframeBuilder extends Builder {
 
     const subdivisions = controlPointsCount - 2
 
-    const totalCurves = this.framesSet[0].groups.flatMap(x => x.curves).length
-    const curveLengths = range(totalCurves).flatMap(() => 0)
+    const curveLengths = range(this.framesSet[0].groups.length).map(i =>
+      range(this.framesSet[0].groups[i].curves.length).map(() => 0)
+    )
     this.frames(
       keyframe => {
-        keyframe.groups
-          .flatMap(x => x.curves)
-          .forEach((curve, j) => {
+        keyframe.groups.forEach((group, groupIndex) => {
+          group.curves.forEach((curve, curveIndex) => {
             // interpolate the bezier curves which are too short
             if (curve.length < controlPointsCount) {
               this.interpolateCurve(curve, controlPointsCount)
@@ -91,8 +91,10 @@ export class KeyframeBuilder extends Builder {
 
             const length = curvePath.getLength()
             // We sample each curve according to its maximum keyframe length
-            if (length > curveLengths[j]) curveLengths[j] = length
+            if (length > curveLengths[groupIndex][curveIndex])
+              curveLengths[groupIndex][curveIndex] = length
           })
+        })
       },
       [0, -1]
     )

@@ -1,5 +1,5 @@
 import { useFrame, useThree } from '@react-three/fiber'
-import { range } from 'lodash'
+import { range, sumBy } from 'lodash'
 import { Ref, RefObject, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { Vector2 } from 'three'
@@ -90,34 +90,34 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
     state.gl.getDrawingBufferSize(targetVector)
   )
 
-  const meshRef = useRef<
-    THREE.InstancedMesh<THREE.PlaneGeometry, THREE.ShaderMaterial>
-  >(null!)
+  const curveCount = curveLengths.flat().length
 
-  // curves are sampled according to how long they are
-  const curveCount = curveLengths.length
-
-  const { pointProgress, pointCount } = useMemo(() => {
-    let pointCount = 0
-    const pointProgress = Float32Array.from(
-      curveLengths.flatMap((curveLength, curveI) => {
-        const pointsInCurve =
-          (curveLength * resolution.x) / (spacing * defaults.size![0])
-
-        pointCount += pointsInCurve
-        return range(pointsInCurve).flatMap(vertexI => {
-          const pointProg = vertexI / (pointsInCurve - 1)
-          const curveProg = curveI / Math.max(1, curveCount - 1)
-          // sample from middle of pixels
-          return [
-            pointProg,
-            curveProg * (1 - 1 / curveCount) + 0.5 / curveCount
-          ]
+  const { pointProgress } = useMemo(() => {
+    let curveIndex = 0
+    const pointProgress = curveLengths.map(group => {
+      const thisPointProgress = Float32Array.from(
+        group.flatMap(curveLength => {
+          const pointsInCurve =
+            (curveLength * resolution.x) / (spacing * defaults.size![0])
+          const r = range(pointsInCurve).flatMap(vertexI => {
+            const pointProg = vertexI / (pointsInCurve - 1)
+            const curveProg = curveIndex / Math.max(1, curveCount - 1)
+            // sample from middle of pixels
+            return [
+              pointProg,
+              curveProg * (1 - 1 / curveCount) + 0.5 / curveCount
+            ]
+          })
+          curveIndex++
+          return r
         })
-      })
-    )
-    return { pointProgress, pointCount }
+      )
+      return thisPointProgress
+    })
+    return { pointProgress }
   }, [resolution, curveCount])
+
+  const meshRef = useRef<THREE.Group>(null!)
 
   const feedback = useRef<FeedbackTextureRef>({
     texture: new THREE.DataTexture()
@@ -130,9 +130,15 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
         return meshRef.current
       }}
       defaultDraw={(self, frame, progress, ctx) => {
-        self.material.uniforms.pointsTex.value = feedback.current.texture
-        self.material.uniforms.progress.value = progress
-        self.material.uniformsNeedUpdate = true
+        self.children.forEach(c => {
+          const child = c as THREE.InstancedMesh<
+            THREE.PlaneGeometry,
+            THREE.ShaderMaterial
+          >
+          child.material.uniforms.pointsTex.value = feedback.current.texture
+          child.material.uniforms.progress.value = progress
+          child.material.uniformsNeedUpdate = true
+        })
       }}
       show={self => {
         self.visible = true
@@ -196,27 +202,30 @@ ${
           `
         }
       />
-      <instancedMesh ref={meshRef} args={[undefined, undefined, pointCount]}>
-        <planeGeometry args={[defaults.size![0], defaults.size![1]]}>
-          <instancedBufferAttribute
-            attach='attributes-pointInfo'
-            args={[pointProgress, 2]}
-          />
-        </planeGeometry>
-        <shaderMaterial
-          transparent
-          uniforms={{
-            colorTex: { value: colorTex },
-            thicknessTex: { value: thicknessTex },
-            pointsTex: { value: feedback.current.texture },
-            jitter: { value: jitter },
-            flicker: { value: flicker },
-            resolution: { value: resolution },
-            defaults: { value: defaults },
-            progress: { value: 0 }
-          }}
-          vertexShader={
-            /*glsl*/ `
+      <group ref={meshRef}>
+        {range(pointProgress.length).map(i => (
+          <instancedMesh
+            args={[undefined, undefined, pointProgress[i].length / 2]}>
+            <planeGeometry args={[defaults.size![0], defaults.size![1]]}>
+              <instancedBufferAttribute
+                attach='attributes-pointInfo'
+                args={[pointProgress[i], 2]}
+              />
+            </planeGeometry>
+            <shaderMaterial
+              transparent
+              uniforms={{
+                colorTex: { value: colorTex },
+                thicknessTex: { value: thicknessTex },
+                pointsTex: { value: feedback.current.texture },
+                jitter: { value: jitter },
+                flicker: { value: flicker },
+                resolution: { value: resolution },
+                defaults: { value: defaults },
+                progress: { value: 0 }
+              }}
+              vertexShader={
+                /*glsl*/ `
 struct Jitter {
   vec2 size;
   vec2 position;
@@ -310,9 +319,9 @@ void main() {
         thisRotation + 1.5707 + jitterRotation) * pixel),
       0, 1);
 }`
-          }
-          fragmentShader={
-            /*glsl*/ `
+              }
+              fragmentShader={
+                /*glsl*/ `
 uniform vec2 resolution;
 in vec2 vUv;
 in vec4 vColor;
@@ -327,9 +336,11 @@ void main() {
   // gl_FragColor = processColor(vColor, vUv);
   gl_FragColor = processColor(vColor, vUv);
 }`
-          }
-        />
-      </instancedMesh>
+              }
+            />
+          </instancedMesh>
+        ))}
+      </group>
     </ChildComponent>
   )
 }

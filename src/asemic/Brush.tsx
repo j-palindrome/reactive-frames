@@ -3,7 +3,12 @@ import { range, sumBy } from 'lodash'
 import { Ref, RefObject, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { Vector2 } from 'three'
-import { bezier3, multiBezier2 } from '../../util/src/shaders/bezier'
+import {
+  bezier2,
+  bezier3,
+  bezierPoint,
+  multiBezierProgress
+} from '../../util/src/shaders/bezier'
 import { rotate2d } from '../../util/src/shaders/manipulation'
 import { hash } from '../../util/src/shaders/utilities'
 import { ChildComponent } from '../blocks/FrameChildComponents'
@@ -135,7 +140,6 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
             THREE.PlaneGeometry,
             THREE.ShaderMaterial
           >
-          child.material.uniforms.pointsTex.value = feedback.current.texture
           child.material.uniforms.progress.value = progress
           child.material.uniformsNeedUpdate = true
         })
@@ -146,62 +150,6 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
       hide={self => {
         self.visible = false
       }}>
-      <FeedbackTexture
-        name={`${props.name}-pointsTex`}
-        ref={feedback}
-        width={controlPointsCount}
-        height={curveCount}
-        uniforms={{
-          keyframesTex: { value: keyframesTex },
-          progress: { value: 0 }
-        }}
-        includes={
-          /*glsl*/ `
-          uniform sampler3D keyframesTex;
-
-          ${loop ? '#define LOOP 1' : ''}
-
-          ${multiBezier2(loop ? keyframeCount + 2 : keyframeCount, {
-            endPoints: loop ? false : true
-          })}
-          ${includes ?? ''}
-          ${
-            modifyPosition
-              ? /*glsl*/ `
-          vec3 modifyPosition(vec3 lastPoint, vec3 thisPoint) {
-            ${modifyPosition}
-          }`
-              : ''
-          }
-        `
-        }
-        fragmentShader={
-          /*glsl*/ `
-float kfCount = ${keyframeCount}.;
-// vec3 lastPoint passed in
-vec3[${loop ? keyframeCount + 2 : keyframeCount}] kfPoints;
-for (int j = 0; j < ${keyframeCount}; j ++) {
-  kfPoints[j] = vec3(texture(keyframesTex, vec3(vUv.x, vUv.y, float(j) / ${keyframeCount}.)).xy, 0);
-}
-
-#ifdef LOOP
-kfPoints[${keyframeCount}] = vec3(texture(keyframesTex, vec3(vUv.x, vUv.y, 0.)).xy, 0);
-kfPoints[${
-            keyframeCount + 1
-          }] = vec3(texture(keyframesTex, vec3(vUv.x, vUv.y, 1. / kfCount)).xy, 0);
-#endif
-
-float thisStrength = mix(texture(keyframesTex, vec3(vUv.x, vUv.y, floor(progress * kfCount) / kfCount)).z, texture(keyframesTex, vec3(vUv.x, vUv.y, ceil(progress * kfCount) / kfCount)).z, fract(progress * kfCount));
-
-vec3 nextKeyframe = vec3(multiBezier2(progress, kfPoints, vec2(1, 1)).position, thisStrength);
-${
-  modifyPosition
-    ? /*glsl*/ `return modifyPosition(lastPoint, nextKeyframe);`
-    : /*glsl*/ `return nextKeyframe;`
-}
-          `
-        }
-      />
       <group ref={meshRef}>
         {range(pointProgress.length).map(i => (
           <instancedMesh
@@ -217,7 +165,7 @@ ${
               uniforms={{
                 colorTex: { value: colorTex },
                 thicknessTex: { value: thicknessTex },
-                pointsTex: { value: feedback.current.texture },
+                keyframesTex: { value: keyframesTex },
                 jitter: { value: jitter },
                 flicker: { value: flicker },
                 resolution: { value: resolution },
@@ -226,6 +174,17 @@ ${
               }}
               vertexShader={
                 /*glsl*/ `
+${
+  loop
+    ? /*glsl*/ `
+#define LOOP 1;
+const bool loop = true;`
+    : ''
+}
+
+#define keyframeCount ${keyframeCount}.
+#define controlPointsCount ${controlPointsCount}.
+
 struct Jitter {
   vec2 size;
   vec2 position;
@@ -236,7 +195,7 @@ struct Jitter {
 
 in vec2 pointInfo;
 
-uniform sampler2D pointsTex;
+uniform sampler3D keyframesTex;
 uniform sampler3D thicknessTex;
 uniform sampler3D colorTex;
 uniform vec2 resolution;
@@ -250,9 +209,10 @@ out vec4 vColor;
 out float v_test;
 out float discardPoint;
 
-${multiBezier2(controlPointsCount)}
 ${rotate2d}
 ${hash}
+${multiBezierProgress}
+${bezierPoint}
 
 vec2 processVertex(vec2 position) {
   ${vertexShader}
@@ -267,20 +227,57 @@ void main() {
   float curveProgress = pointInfo.y;
   float pointProgress = pointInfo.x;
 
-  vec3[${controlPointsCount}] points = vec3[${controlPointsCount}](
-    ${range(controlPointsCount)
-      .map(
-        i =>
-          /*glsl*/ `texture(pointsTex, vec2(${i}. / ${
-            controlPointsCount - 1
-          }., curveProgress)).xyz`
-      )
-      .join(', ')}
-  );
-
-  BezierPoint point = multiBezier2(pointProgress, points, resolution);
-  vec2 thisPosition = point.position;
-  float thisRotation = point.rotation;
+  // find progress through keyframes and round to cycles to quadratic bezier based on curve progress
+  vec2 pointCurveProgress = 
+    multiBezierProgress(pointProgress, controlPointsCount);
+  vec2 keyframeCurveProgress = 
+    multiBezierProgress(progress, keyframesCount, loop);
+  
+  vec4 points[3];
+  for (float pointI = 0.; pointI < 3.; pointI ++) {
+    vec4 keyframePoints[3];
+    for (int keyframeI = 0; keyframeI < 3; keyframeI ++) {
+      keyframePoints[i] = texture(
+        keyframesTex,
+        vec3(
+          (pointCurveProgress.x + pointI) 
+            / controlPointsCount,   
+          curveProgress, 
+          (keyframeCurveProgress.x + float(i)) / keyframesCount
+        )
+      );
+      if (loop) {
+        if (keyframeCurveProgress.x == 0.) {
+          keyframePoints[2] = 
+            mix(keyframePoints[1], keyframePoints[2], 0.5);
+        } else if (keyframeCurveProgress.x == keyframesCount - 2.) {
+          keyframePoints[0] = 
+            mix(keyframePoints[0], keyframePoints[1], 0.5);
+        } else {
+          keyframePoints[0] = 
+            mix(keyframePoints[0], keyframePoints[1], 0.5);
+          keyframePoints[2] = 
+            mix(keyframePoints[1], keyframePoints[2], 0.5);
+        }
+      }
+    }
+    points[int(pointI)] = bezier2(
+      keyframeCurveProgress.y,
+      keyframePoints[0].xy, 
+      keyframePoints[1].xy, 
+      keyframePoints[2].xy);
+  }
+  // adjust to interpolate between things
+  if (pointCurveProgress.x == 0.) {
+    points[2] = mix(points[1], points[2], 0.5);
+  } else if (pointCurveProgress.x == controlPointsCount - 2.) {
+    points[0] = mix(points[0], points[1], 0.5);
+  } else {
+    points[0] = mix(points[0], points[1], 0.5);
+    points[2] = mix(points[1], points[2], 0.5);
+  }
+  vec2 thisPosition = bezierPoint(pointCurveProgress.y, 
+    points[0].xy, points[1].xy, points[2].xy, points[1].z);
   
   vColor = texture(
     colorTex, 

@@ -148,6 +148,17 @@ export default abstract class Builder {
     this.modeSet = 'absolute'
   }
 
+  coordinateToVector(c: Coordinate) {
+    return new Vector2(c[0], c[1])
+  }
+
+  resetTransforms() {
+    this.translateSet.set(0, 0)
+    this.scaleSet.set(1, 1)
+    this.rotateSet = 0
+    this.originSet.set(0, 0)
+  }
+
   lastPoint: Vector2 = new Vector2(0, 0)
   /**
    * translate->scale->rotate
@@ -160,7 +171,7 @@ export default abstract class Builder {
       skipTransforms = false,
       applyGridToOutput = false
     } = {}
-  ): [number, number] {
+  ): Coordinate {
     if (applyGridToInput) {
       this.applyGrid(move)
     }
@@ -188,14 +199,13 @@ export default abstract class Builder {
         this.translateSet.set(0, 0)
         this.scaleSet.set(1, 1)
         this.rotateSet = 0
+        this.originSet.set(0, 0)
       }
     }
     if (move[2]?.reset) {
-      this.translateSet.set(0, 0)
-      this.scaleSet.set(1, 1)
-      this.rotateSet = 0
-      this.originSet.set(0, 0)
+      this.resetTransforms()
     }
+
     if (move[2]?.grid) {
       this.gridSet = move[2].grid
     }
@@ -215,7 +225,6 @@ export default abstract class Builder {
       })
       this.translateSet.set(newPoint[0], newPoint[1])
     }
-
     if (move[2]?.rotate) {
       this.rotateSet = (move[2].rotate / this.gridSet[0]) * Math.PI * 2
     }
@@ -335,11 +344,8 @@ export default abstract class Builder {
 
     this.lastPoint.set(point[0], point[1])
     return applyGridToOutput
-      ? (this.applyGrid([this.lastPoint.x, this.lastPoint.y]) as [
-          number,
-          number
-        ])
-      : [this.lastPoint.x, this.lastPoint.y]
+      ? this.applyGrid([this.lastPoint.x, this.lastPoint.y, move[2]])
+      : [this.lastPoint.x, this.lastPoint.y, move[2]]
   }
 
   protected getLastPoint(index: number = -1): PointBuilder {
@@ -426,9 +432,11 @@ export default abstract class Builder {
           ? [0, 0]
           : this.applyGrid(
               vector
-                .set(...this.getRelative(translate[0]))
+                .set(...(this.getRelative(translate[0]) as [number, number]))
                 .lerp(
-                  vector2.set(...this.getRelative(translate[1])),
+                  vector2.set(
+                    ...(this.getRelative(translate[1]) as [number, number])
+                  ),
                   Math.random()
                 )
                 .toArray()
@@ -444,8 +452,13 @@ export default abstract class Builder {
           !scale
             ? [1, 1]
             : vector
-                .set(...this.getRelative(scale[0]))
-                .lerp(vector2.set(...this.getRelative(scale[1])), Math.random())
+                .set(...(this.getRelative(scale[0]) as [number, number]))
+                .lerp(
+                  vector2.set(
+                    ...(this.getRelative(scale[1]) as [number, number])
+                  ),
+                  Math.random()
+                )
                 .toArray()
         ) as [number, number]
         const originPoint = !origin ? [0, 0] : this.getRelative(origin)

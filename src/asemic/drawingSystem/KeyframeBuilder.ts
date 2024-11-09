@@ -5,10 +5,13 @@ import { PointBuilder } from './PointBuilder'
 import * as THREE from 'three'
 import Builder from './Builder'
 import { Jitter } from '../Brush'
+import { multiBezierProgressJS } from '@/util/src/shaders/bezier'
+import invariant from 'tiny-invariant'
 
 const vector = new Vector2()
 const vector2 = new Vector2()
 const vector3 = new Vector2()
+const matrix = new THREE.Matrix3()
 export class KeyframeBuilder extends Builder {
   curveCounts: number[]
 
@@ -31,7 +34,24 @@ export class KeyframeBuilder extends Builder {
     if (keyframe < 0) keyframe += this.framesSet.length
     this.framesSet.push(cloneDeep(this.framesSet[keyframe]))
     this.target(undefined, -1)
-    this.points(p => p.warp(warp))
+    const transformData: GroupData['transform'] = {
+      translate: warp.translate
+        ? this.coordinateToVector(this.getRelative(warp.translate))
+        : undefined,
+      rotate: warp.rotate
+        ? (warp.rotate * Math.PI * 2) / this.gridSet[0]
+        : undefined,
+      scale: warp.scale
+        ? this.coordinateToVector(this.getRelative(warp.scale))
+        : undefined
+    }
+    this.groups(
+      g =>
+        (g.transform = {
+          ...g.transform,
+          ...transformData
+        })
+    )
     return this
   }
 
@@ -52,6 +72,7 @@ export class KeyframeBuilder extends Builder {
   }
 
   packToTexture(defaults: Jitter) {
+    this.resetTransforms()
     const keyframeCount = this.framesSet.length
     const curveCounts = this.framesSet[0].groups.flatMap(x => x.curves).length
 
@@ -62,7 +83,6 @@ export class KeyframeBuilder extends Builder {
     )!
 
     const subdivisions = controlPointsCount - 2
-
     const curveLengths = range(this.framesSet[0].groups.length).map(i =>
       range(this.framesSet[0].groups[i].curves.length).map(() => 0)
     )
@@ -146,6 +166,16 @@ export class KeyframeBuilder extends Builder {
       THREE.RedFormat
     )
 
+    this.groups(
+      g => {
+        g.transform.origin = this.coordinateToVector(
+          this.getBounds(g.curves.flat()).min
+        ).divideScalar(100)
+      },
+      [0, -1],
+      [0, -1]
+    )
+
     return {
       keyframesTex,
       colorTex,
@@ -161,5 +191,42 @@ export class KeyframeBuilder extends Builder {
     if (!to) to = from
     else if (to < 0) to += this.framesSet.length
     this.targetFramesSet = [from, to]
+  }
+
+  getGroupTransform(progress: number, groupI: number) {
+    const { t, start } = multiBezierProgressJS(progress, this.framesSet.length)
+    const makeBezier = <T extends keyof GroupData['transform']>(
+      key: T,
+      defaultOption: GroupData['transform'][T]
+    ) => {
+      const groups = range(3).map(
+        i =>
+          this.framesSet[start + i].groups[groupI].transform[key] ??
+          defaultOption
+      )
+      if (groups[0] instanceof Vector2) {
+        invariant(groups[1] instanceof Vector2 && groups[2] instanceof Vector2)
+        return new THREE.QuadraticBezierCurve(
+          vector.copy(groups[0]),
+          vector2.copy(groups[1] as Vector2),
+          vector3.copy(groups[2] as Vector2)
+        ).getPointAt(t) as GroupData['transform'][T]
+      } else if (typeof groups[0] === 'number') {
+        return new THREE.QuadraticBezierCurve(
+          vector.set(groups[0] / this.gridSet[0], 0),
+          vector2.set(groups[1] as number, 0),
+          vector3.set(groups[2] as number, 0)
+        ).getPointAt(t).x as GroupData['transform'][T]
+      }
+    }
+
+    const { rotate, translate, scale, origin } = {
+      rotate: makeBezier('rotate', 0)!,
+      translate: makeBezier('translate', new Vector2(0, 0))!,
+      scale: makeBezier('scale', new Vector2(1, 1))!,
+      origin: makeBezier('origin', new Vector2(0, 0))!
+    }
+
+    return { rotate, translate, scale, origin }
   }
 }

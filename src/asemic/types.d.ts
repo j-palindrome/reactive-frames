@@ -12,13 +12,21 @@ declare global {
     translate?: Coordinate
     scale?: [number, number]
     rotate?: number
-  }
-  type CoordinateData = TransformData & {
     mode?: Builder['modeSet']
-    strength?: number
-    thickness?: number
     reset?: boolean
     grid?: [number, number]
   }
-  type GroupData = { curves: PointBuilder[][]; transform: TransformData }
+  type CoordinateData = TransformData & {
+    strength?: number
+    thickness?: number
+  }
+  type GroupData = {
+    curves: PointBuilder[][]
+    transform: {
+      translate?: Vector2
+      rotate?: number
+      scale?: Vector2
+      origin?: Vector2
+    }
+  }
 }

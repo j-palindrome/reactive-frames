@@ -33,10 +33,6 @@ export default abstract class Builder {
     transform: TransformData
   }[] = [{ groups: [], transform: {} }]
 
-  applyGrid(point: Coordinate): Coordinate {
-    return [point[0] * this.gridSet[0], point[1] * this.gridSet[1], point[2]]
-  }
-
   constructor() {}
 
   protected makeCurvePath(
@@ -160,193 +156,6 @@ export default abstract class Builder {
   }
 
   lastPoint: Vector2 = new Vector2(0, 0)
-  /**
-   * translate->scale->rotate
-   */
-  getRelative(
-    move: Coordinate,
-    {
-      reverseMatrices = false,
-      applyGrid: applyGridToInput = false,
-      skipTransforms = false,
-      applyGridToOutput = false
-    } = {}
-  ): Coordinate {
-    if (applyGridToInput) {
-      this.applyGrid(move)
-    }
-    let modeSave: Builder['modeSet'] | undefined = undefined,
-      scaleSave: Vector2 | undefined = undefined,
-      translateSave: Vector2 | undefined = undefined,
-      originSave: Vector2 | undefined = undefined,
-      rotateSave: number | undefined = undefined
-    if (skipTransforms) {
-      modeSave = this.modeSet
-      scaleSave = this.scaleSet.clone()
-      rotateSave = this.rotateSet
-      translateSave = this.translateSet.clone()
-      originSave = this.originSet.clone()
-      this.scaleSet.set(1, 1)
-      this.translateSet.set(0, 0)
-      this.originSet.set(0, 0)
-      this.rotateSet = 0
-      this.modeSet = 'absolute'
-    }
-    if (move[2]?.mode) {
-      // reset transforms when switching modes
-      this.modeSet = move[2].mode
-      if (move[2]?.reset !== false) {
-        this.translateSet.set(0, 0)
-        this.scaleSet.set(1, 1)
-        this.rotateSet = 0
-        this.originSet.set(0, 0)
-      }
-    }
-    if (move[2]?.reset) {
-      this.resetTransforms()
-    }
-
-    if (move[2]?.grid) {
-      this.gridSet = move[2].grid
-    }
-
-    if (move[2]?.origin) {
-      const newPoint = this.getRelative(move[2].origin, {
-        reverseMatrices: true,
-        skipTransforms: true
-      })
-      this.originSet.set(newPoint[0], newPoint[1])
-    }
-
-    if (move[2]?.translate) {
-      const newPoint = this.getRelative(move[2].translate, {
-        reverseMatrices: true,
-        skipTransforms: true
-      })
-      this.translateSet.set(newPoint[0], newPoint[1])
-    }
-    if (move[2]?.rotate) {
-      this.rotateSet = (move[2].rotate / this.gridSet[0]) * Math.PI * 2
-    }
-    if (move[2]?.scale) {
-      this.scaleSet.set(
-        move[2].scale[0] / this.gridSet[0],
-        move[2].scale[1] / this.gridSet[1]
-      )
-    }
-
-    const gridMove = [move[0] / this.gridSet[0], move[1] / this.gridSet[1]]
-
-    switch (this.modeSet) {
-      case 'absolute':
-        relativeVector
-          .set(gridMove[0], gridMove[1])
-          .sub(this.originSet)
-          .multiply(this.scaleSet)
-          .rotateAround({ x: 0, y: 0 }, this.rotateSet)
-          .add(this.translateSet)
-          .add(this.originSet)
-
-        if (!reverseMatrices) {
-          for (let matrix of this.matrices) {
-            relativeVector.applyMatrix3(matrix)
-          }
-        }
-        break
-      case 'relative':
-        relativeVector
-          .set(gridMove[0], gridMove[1])
-          .sub(this.originSet)
-          .multiply(this.scaleSet)
-          .rotateAround({ x: 0, y: 0 }, this.rotateSet)
-          .add(this.translateSet)
-          .add(this.originSet)
-          .add(this.lastPoint)
-        break
-      case 'polar':
-        relativeVector
-          .set(gridMove[0], 0)
-          .sub(this.originSet)
-          .rotateAround(
-            { x: 0, y: 0 },
-            gridMove[1] * Math.PI * 2 + this.rotateSet
-          )
-          .multiply(this.scaleSet)
-          .add(this.translateSet)
-          .add(this.originSet)
-          .add(this.lastPoint)
-
-        break
-      case 'steer':
-        const pointBefore = this.getLastPoint(-2)
-        relativeVector
-          .set(gridMove[0], 0)
-          .sub(this.originSet)
-          .rotateAround(
-            {
-              x: 0,
-              y: 0
-            },
-            gridMove[1] * Math.PI * 2 +
-              this.rotateSet +
-              relativeVector2.copy(this.lastPoint).sub(pointBefore).angle()
-          )
-          .multiply(this.scaleSet)
-          .add(this.translateSet)
-          .add(this.originSet)
-          .add(this.lastPoint)
-        break
-      case 'intersect':
-        move[1] =
-          move[1] < 0
-            ? move[1] +
-              this.framesSet[0].groups[this.targetGroupsSet[0]].curves.length
-            : move[1]
-
-        const curvePath: THREE.CurvePath<Vector2> = this.makeCurvePath(
-          this.framesSet[0].groups[this.targetGroupsSet[0]].curves[move[1]]
-        )
-
-        const pathPoint = curvePath.getPointAt(gridMove[0])
-        if (reverseMatrices) {
-          // we revert the matrix transformations to get what you would pass into this function to get this point as output.
-          for (let i = this.matrices.length - 1; i >= 0; i--) {
-            pathPoint.applyMatrix3(this.matrices[i].clone().invert())
-          }
-        }
-
-        relativeVector
-          .copy(pathPoint)
-          .sub(this.originSet)
-          .multiply(this.scaleSet)
-          .rotateAround({ x: 0, y: 0 }, this.rotateSet)
-          .add(this.translateSet)
-          .add(this.originSet)
-        break
-    }
-
-    const point = relativeVector.toArray()
-
-    if (skipTransforms) {
-      invariant(
-        modeSave &&
-          scaleSave &&
-          translateSave &&
-          originSave &&
-          rotateSave !== undefined
-      )
-      this.modeSet = modeSave
-      this.scaleSet.copy(scaleSave)
-      this.translateSet.copy(translateSave)
-      this.originSet.copy(originSave)
-      this.rotateSet = rotateSave
-    }
-
-    this.lastPoint.set(point[0], point[1])
-    return applyGridToOutput
-      ? this.applyGrid([this.lastPoint.x, this.lastPoint.y, move[2]])
-      : [this.lastPoint.x, this.lastPoint.y, move[2]]
-  }
 
   protected getLastPoint(index: number = -1): PointBuilder {
     throw new Error('not implemented')
@@ -377,30 +186,21 @@ export default abstract class Builder {
     }
   }
 
-  protected toCurve(points: Coordinate[], { getRelative = false } = {}) {
-    return points.map(
-      point =>
-        new PointBuilder(getRelative ? this.getRelative(point) : point, this, {
-          strength: point[2]?.strength
-        })
-    )
-  }
-
-  getBounds(points: PointBuilder[], { applyGrid = true } = {}) {
-    const flatX = points.map(x => x.x * (applyGrid ? this.gridSet[0] : 1))
-    const flatY = points.map(y => y.y * (applyGrid ? this.gridSet[1] : 1))
-    const minCoord: Coordinate = [min(flatX)!, min(flatY)!]
-    const maxCoord: Coordinate = [max(flatX)!, max(flatY)!]
+  getBounds(points: PointBuilder[]) {
+    const flatX = points.map(x => x.x)
+    const flatY = points.map(y => y.y)
+    const minCoord = new Vector2(min(flatX)!, min(flatY)!)
+    const maxCoord = new Vector2(max(flatX)!, max(flatY)!)
     return {
       min: minCoord,
       max: maxCoord,
-      size: [maxCoord[0] - minCoord[0], maxCoord[1] - minCoord[1]] as Coordinate
+      size: new Vector2().subVectors(maxCoord, minCoord)
     }
   }
 
   along(points: Coordinate[]) {
     const curve = this.makeCurvePath(
-      this.toCurve(points, { getRelative: true })
+      points.map(x => this.)
     )
     return this.groups((g, { groupProgress }) => {
       const curveProgress = curve.getPointAt(groupProgress)

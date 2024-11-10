@@ -1,5 +1,6 @@
 import { Vector2 } from 'three'
 import Builder from './Builder'
+import NewBuilder from './NewBuilder'
 const vector = new Vector2()
 const vector2 = new Vector2()
 
@@ -8,11 +9,11 @@ export class PointBuilder extends Vector2 {
   color?: [number, number, number]
   alpha?: number
   thickness?: number
-  parent: Builder
+  parent: NewBuilder
 
   constructor(
-    point: Coordinate = [0, 0],
-    parent: Builder,
+    point: [number, number],
+    parent: NewBuilder,
     {
       strength = 0,
       color,
@@ -33,41 +34,17 @@ export class PointBuilder extends Vector2 {
     this.parent = parent
   }
 
-  rotateFrom(from: Coordinate, amount: number) {
-    from = this.parent.getRelative(from)
-    this.rotateAround(vector.set(from[0], from[1]), amount * Math.PI * 2)
+  lerpRandom(point: Vector2) {
+    const difference = point.clone().sub(this)
+    this.randomize(difference)
     return this
   }
 
-  translateFrom(from: Coordinate, to: Coordinate, amount: number) {
-    from = this.parent.applyGrid(from)
-    to = this.parent.applyGrid(to)
-    this.sub(vector.set(from[0], from[1]))
-      .lerp(vector2.set(to[0], to[1]), amount)
-      .add(vector)
-    return this
-  }
-
-  scaleFrom(from: Coordinate, by: Coordinate) {
-    from = this.parent.getRelative(from, { applyGrid: true })
-    by = this.parent.applyGrid(by)
-    this.sub(vector.set(from[0], from[1]))
-      .multiply(vector2.set(by[0], by[1]))
-      .add(vector)
-    return this
-  }
-
-  randomize(amount: [number, number] = [1, 1]) {
-    const v = vector.set(...(this.parent.applyGrid(amount) as [number, number]))
-    this.add(vector.random().subScalar(0.5).multiply(v))
-    return this
-  }
-
-  warp(data: CoordinateData) {
-    const c = this.parent.applyGrid([this.x, this.y])
-    const coord = this.parent.getRelative([c[0], c[1], data])
-
-    this.set(coord[0], coord[1])
+  randomize(point: Vector2) {
+    this.add({
+      x: point[0] * Math.random() - point[0] / 2,
+      y: point[1] * Math.random() - point[1] / 2
+    })
     return this
   }
 

@@ -114,7 +114,7 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
               curveProg * (1 - 1 / curveCount) + 0.5 / curveCount
             ]
           })
-          curveIndex++˝
+          curveIndex++
           return r
         })
       )

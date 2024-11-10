@@ -3,22 +3,22 @@ import { PointBuilder } from './drawingSystem/PointBuilder'
 import Builder from './drawingSystem/Builder'
 
 declare global {
-  type Coordinate =
-    | [number, number, CoordinateData | undefined]
-    | [number, number]
+  type Coordinate = [number, number, CoordinateData] | [number, number]
 
-  type TransformData = {
-    origin?: Coordinate
-    translate?: Coordinate
+  type CoordinateData = {
+    action?: 'push' | 'pop' | 'reset' | 'clear'
+    origin?: [number, number]
+    translate?: [number, number]
     scale?: [number, number]
     rotate?: number
-    mode?: Builder['modeSet']
-    reset?: boolean
-    grid?: [number, number]
-  }
-  type CoordinateData = TransformData & {
     strength?: number
     thickness?: number
+  }
+  type TransformData = {
+    origin?: Vector2
+    scale?: Vector2
+    rotate?: number
+    translate?: Vector2
   }
   type GroupData = {
     curves: PointBuilder[][]

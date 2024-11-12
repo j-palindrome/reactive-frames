@@ -131,6 +131,12 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
         return meshRef.current
       }}
       defaultDraw={(self, frame, progress, ctx) => {
+        const frameTransform = keyframes.getFrameTransform(progress)
+        self.rotation.set(0, 0, frameTransform.rotate)
+        self.scale.set(...frameTransform.scale.toArray(), 1)
+        self.position.set(...frameTransform.translate.toArray(), 0)
+        // console.log(frameTransform.translate)
+
         self.children.forEach((c, i) => {
           const child = c as THREE.InstancedMesh<
             THREE.PlaneGeometry,
@@ -138,18 +144,13 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
           >
           child.material.uniforms.progress.value = progress
           child.material.uniformsNeedUpdate = true
-          // const { translate, scale, rotate } = keyframes.getGroupTransform(
-          //   progress,
-          //   i
-          // )
-          // child.material.uniforms.origin.value = origin
+          const { translate, scale, rotate, origin } =
+            keyframes.getGroupTransform(progress, i)
 
-          // if (Math.random() < 0.02) console.log(origin.x, origin.y)
-
-          // child.position.set(translate.x + origin.x, translate.y + origin.y, 0)
-          // child.scale.set(scale.x, scale.y, 1)
-          // child.rotation.set(0, 0, rotate)
-          child.matrixAutoUpdate = true
+          child.material.uniforms.origin.value = origin
+          child.position.set(translate.x + origin.x, translate.y + origin.y, 0)
+          child.scale.set(scale.x, scale.y, 1)
+          child.rotation.set(0, 0, rotate)
         })
       }}
       show={self => {
@@ -327,7 +328,8 @@ void main() {
       + rotate2d(
         position.xy * jitterSize * thisThickness * pixel, 
         point.rotation + 1.5707 + jitterRotation) 
-      / aspectRatio),
+        / aspectRatio
+      - origin),
       0, 1);
 }
 `

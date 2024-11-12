@@ -32,7 +32,7 @@ export default class Builder {
   keyframes: {
     groups: GroupData[]
     transform: TransformData
-  }[] = [{ groups: [], transform: {} }]
+  }[] = [{ groups: [], transform: this.toTransformData({}) }]
   targetGroups: [number, number] = [0, 0]
   targetFrames: [number, number] = [0, 0]
   initialized = false
@@ -106,7 +106,33 @@ export default class Builder {
     return point.clone().applyMatrix3(this.transform.clone().invert()).toArray()
   }
 
-  toTransformData(transform: CoordinateData) {}
+  toTransformData(transform: CoordinateData) {
+    const transformData: TransformData = {
+      scale: new Vector2(1, 1),
+      rotate: 0,
+      translate: new Vector2(0, 0),
+      origin: new Vector2(0, 0)
+    }
+    if (transform.translate) {
+      transformData.translate.add({
+        x: transform.translate[0],
+        y: transform.translate[1]
+      })
+    }
+    if (transform.scale) {
+      if (typeof transform.scale === 'number') {
+        transformData.scale.multiplyScalar(transform.scale)
+      } else
+        transformData.scale.multiply({
+          x: transform.scale[0],
+          y: transform.scale[1]
+        })
+    }
+    if (transform.rotate !== undefined) {
+      transformData.rotate += transform.rotate * Math.PI * 2
+    }
+    return transformData
+  }
 
   toTransform(transform: CoordinateData) {
     const matrix = new Matrix3()
@@ -181,7 +207,16 @@ export default class Builder {
     }
   }
 
-  applyTransformData(transform: TransformData) {}
+  applyTransformData(
+    nextTransformData: TransformData,
+    transformData: TransformData
+  ) {
+    transformData.scale.multiply(nextTransformData.scale)
+    transformData.translate.add(nextTransformData.translate)
+    transformData.rotate += nextTransformData.rotate
+    transformData.origin.add(nextTransformData.origin)
+    return transformData
+  }
 
   to(warp: CoordinateData, keyframe: number = -1) {
     if (keyframe < 0) keyframe += this.keyframes.length
@@ -189,7 +224,7 @@ export default class Builder {
     this.target(undefined, -1)
 
     this.frames(f => {
-      this.applyTransformData(f.transform, this.toTransformData(warp))
+      this.applyTransformData(this.toTransformData(warp), f.transform)
     })
     return this
   }
@@ -286,16 +321,6 @@ export default class Builder {
       RedFormat
     )
 
-    // this.groups(
-    //   g => {
-    //     g.transform.origin = this.toPoint(
-    //       this.getBounds(g.curves.flat()).min
-    //     ).divideScalar(100)
-    //   },
-    //   [0, -1],
-    //   [0, -1]
-    // )
-
     return {
       keyframesTex,
       colorTex,
@@ -306,41 +331,58 @@ export default class Builder {
     }
   }
 
-  getGroupTransform(progress: number, groupI: number) {
+  curveInterpolate(groups: Vector2[] | number[], t: number) {
+    if (groups[0] instanceof Vector2) {
+      invariant(groups[1] instanceof Vector2 && groups[2] instanceof Vector2)
+      return new QuadraticBezierCurve(
+        v1.copy(groups[0]),
+        v2.copy(groups[1] as Vector2),
+        v3.copy(groups[2] as Vector2)
+      ).getPointAt(t)
+    } else if (typeof groups[0] === 'number') {
+      return new QuadraticBezierCurve(
+        v1.set(groups[0], 0),
+        v2.set(groups[1] as number, 0),
+        v3.set(groups[2] as number, 0)
+      ).getPointAt(t).x
+    }
+  }
+
+  getFrameTransform(progress: number) {
     const { t, start } = multiBezierProgressJS(progress, this.keyframes.length)
-    const makeBezier = <T extends keyof TransformData>(
-      key: T,
-      defaultOption: TransformData[T]
-    ) => {
-      const groups = range(3).map(
-        i =>
-          this.keyframes[start + i].groups[groupI].transform[key] ??
-          defaultOption
-      )
-      if (groups[0] instanceof Vector2) {
-        invariant(groups[1] instanceof Vector2 && groups[2] instanceof Vector2)
-        return new QuadraticBezierCurve(
-          v1.copy(groups[0]),
-          v2.copy(groups[1] as Vector2),
-          v3.copy(groups[2] as Vector2)
-        ).getPointAt(t) as GroupData['transform'][T]
-      } else if (typeof groups[0] === 'number') {
-        return new QuadraticBezierCurve(
-          v1.set(groups[0], 0),
-          v2.set(groups[1] as number, 0),
-          v3.set(groups[2] as number, 0)
-        ).getPointAt(t).x as GroupData['transform'][T]
-      }
+
+    const makeBezier = <T extends keyof TransformData>(key: T) => {
+      const groups = range(3).map(i => this.keyframes[start + i].transform[key])
+      return this.curveInterpolate(groups as any[], t)
     }
 
     const { rotate, translate, scale, origin } = {
-      rotate: makeBezier('rotate', 0)!,
-      translate: makeBezier('translate', new Vector2(0, 0))!,
-      scale: makeBezier('scale', new Vector2(1, 1))!,
-      origin: makeBezier('origin', new Vector2(0, 0))!
+      rotate: makeBezier('rotate'),
+      translate: makeBezier('translate'),
+      scale: makeBezier('scale'),
+      origin: makeBezier('origin')
     }
 
-    return { rotate, translate, scale, origin }
+    return { rotate, translate, scale, origin } as TransformData
+  }
+
+  getGroupTransform(progress: number, groupI: number) {
+    const { t, start } = multiBezierProgressJS(progress, this.keyframes.length)
+    const makeBezier = <T extends keyof TransformData>(key: T) => {
+      const groups = range(3).map(
+        i => this.keyframes[start + i].groups[groupI].transform[key]
+      )
+      return this.curveInterpolate(groups as any[], t)
+    }
+
+    const { rotate, translate, scale, origin } = {
+      rotate: makeBezier('rotate'),
+      translate: makeBezier('translate'),
+      scale: makeBezier('scale'),
+      origin: makeBezier('origin')
+    }
+
+    return { rotate, translate, scale, origin } as TransformData
   }
 
   interpolateFrame(keyframe: number, amount = 0.5) {
@@ -414,7 +456,7 @@ export default class Builder {
 
   along(points: Coordinate[]) {
     const curve = this.makeCurvePath(points.map(x => this.toPoint(x)))
-    return this.groups((g, { groupProgress }) => {
+    return this.groups((g, p, { groupProgress }) => {
       const curveProgress = curve.getPointAt(groupProgress)
       const { min } = this.getBounds(g.curves.flat())
       g.curves.flat().forEach(p => {
@@ -445,7 +487,7 @@ export default class Builder {
     frames?: TargetInfo
   ) {
     this.groups(
-      (g, { bounds }) => {
+      (g, p, { bounds }) => {
         let translatePoint = translate
           ? this.toPoint(translate[0])
               .lerpRandom(this.toPoint(translate[1]))
@@ -475,6 +517,7 @@ export default class Builder {
   points(
     callback: (
       point: PointBuilder,
+      p: this,
       {
         keyframeProgress,
         groupProgress,
@@ -492,9 +535,9 @@ export default class Builder {
   ) {
     this.target(groups, frames)
     return this.curves(
-      (curve, { keyframeProgress, groupProgress, curveProgress }) => {
+      (curve, p, { keyframeProgress, groupProgress, curveProgress }) => {
         curve.forEach((point, i) =>
-          callback(point, {
+          callback(point, p, {
             keyframeProgress,
             groupProgress,
             curveProgress,
@@ -508,6 +551,7 @@ export default class Builder {
   curves(
     callback: (
       curve: PointBuilder[],
+      p: this,
       {
         keyframeProgress,
         groupProgress
@@ -522,9 +566,9 @@ export default class Builder {
     frames?: [number, number] | number
   ) {
     this.target(groups, frames)
-    return this.groups((group, { keyframeProgress, groupProgress }) => {
+    return this.groups((group, p, { keyframeProgress, groupProgress }) => {
       group.curves.forEach((curve, i) =>
-        callback(curve, {
+        callback(curve, p, {
           keyframeProgress,
           groupProgress,
           curveProgress: i / group.curves.length,
@@ -537,6 +581,7 @@ export default class Builder {
   groups(
     callback: (
       group: GroupData,
+      parent: this,
       {
         keyframeProgress,
         groupProgress,
@@ -553,9 +598,9 @@ export default class Builder {
     this.target(groups, frames)
     const groupCount = this.keyframes[0].groups.length
 
-    return this.frames((frame, { keyframeProgress }) => {
+    return this.frames((frame, p, { keyframeProgress }) => {
       for (let i = this.targetGroups[0]; i <= this.targetGroups[1]; i++) {
-        callback(frame.groups[i], {
+        callback(frame.groups[i], p, {
           groupProgress: i / groupCount,
           keyframeProgress,
           bounds: this.getBounds(frame.groups[i].curves.flat())
@@ -567,13 +612,14 @@ export default class Builder {
   frames(
     callback: (
       frame: Builder['keyframes'][number],
+      parent: this,
       { keyframeProgress }: { keyframeProgress: number }
     ) => void,
     frames?: TargetInfo
   ) {
     this.target(undefined, frames)
     for (let i = this.targetFrames[0]; i <= this.targetFrames[1]; i++) {
-      callback(this.keyframes[i], {
+      callback(this.keyframes[i], this, {
         keyframeProgress: i / this.keyframes.length
       })
     }
@@ -656,7 +702,10 @@ export default class Builder {
     if (this.initialized) {
       throw new Error("Can't create new groups after initialization.")
     }
-    this.keyframes[0].groups.push({ curves: [], transform: {} })
+    this.keyframes[0].groups.push({
+      curves: [],
+      transform: this.toTransformData({})
+    })
     this.target(-1)
     return this
   }

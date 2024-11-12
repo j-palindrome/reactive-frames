@@ -6,10 +6,10 @@ declare global {
   type Coordinate = [number, number, CoordinateData] | [number, number]
 
   type TransformData = {
-    translate?: Vector2
-    scale?: Vector2
-    rotate?: number
-    origin?: Vector2
+    translate: Vector2
+    scale: Vector2
+    rotate: number
+    origin: Vector2
   }
 
   type CoordinateTransform = {

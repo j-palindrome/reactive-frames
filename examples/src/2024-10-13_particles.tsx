@@ -8,11 +8,9 @@ export default function ParticlesTest() {
   // abcdefghijklmnopqrstuvwxyz
   // a poem in space
   const kf = new Builder(g =>
-    g
-      .applyTransform({ translate: [0, 0.5], push: true })
-      .text('qrstuvwxyz', { width: 0.5 })
+    g.text('abcdefghijklmnopqrstuvwxyz', { width: 1, origin: [0, 0.5] })
   )
-    .to({}, 0)
+    .to({ translate: [0, 0.3] }, 0)
     .to({}, 0)
 
   return (
@@ -22,7 +20,6 @@ export default function ParticlesTest() {
           keyframes={kf}
           name='b'
           defaults={{
-            size: [1 / 100, 1 / 100],
             a: 0.01
           }}
           loop

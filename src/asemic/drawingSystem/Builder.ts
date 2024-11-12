@@ -106,6 +106,8 @@ export default class Builder {
     return point.clone().applyMatrix3(this.transform.clone().invert()).toArray()
   }
 
+  toTransformData(transform: CoordinateData) {}
+
   toTransform(transform: CoordinateData) {
     const matrix = new Matrix3()
 
@@ -179,18 +181,16 @@ export default class Builder {
     }
   }
 
+  applyTransformData(transform: TransformData) {}
+
   to(warp: CoordinateData, keyframe: number = -1) {
     if (keyframe < 0) keyframe += this.keyframes.length
     this.keyframes.push(cloneDeep(this.keyframes[keyframe]))
     this.target(undefined, -1)
 
-    this.groups(
-      g =>
-        (g.transform = {
-          ...g.transform,
-          ...warp
-        })
-    )
+    this.frames(f => {
+      this.applyTransformData(f.transform, this.toTransformData(warp))
+    })
     return this
   }
 
@@ -306,41 +306,42 @@ export default class Builder {
     }
   }
 
-  // getGroupTransform(progress: number, groupI: number) {
-  //   const { t, start } = multiBezierProgressJS(progress, this.keyframes.length)
-  //   const makeBezier = <T extends keyof GroupData['transform']>(
-  //     key: T,
-  //     defaultOption: GroupData['transform'][T]
-  //   ) => {
-  //     const groups = range(3).map(
-  //       i =>
-  //         this.keyframes[start + i].groups[groupI].transform[key] ??
-  //         defaultOption
-  //     )
-  //     if (groups[0] instanceof Vector2) {
-  //       invariant(groups[1] instanceof Vector2 && groups[2] instanceof Vector2)
-  //       return new QuadraticBezierCurve(
-  //         v1.copy(groups[0]),
-  //         v2.copy(groups[1] as Vector2),
-  //         v3.copy(groups[2] as Vector2)
-  //       ).getPointAt(t) as GroupData['transform'][T]
-  //     } else if (typeof groups[0] === 'number') {
-  //       return new QuadraticBezierCurve(
-  //         v1.set(groups[0], 0),
-  //         v2.set(groups[1] as number, 0),
-  //         v3.set(groups[2] as number, 0)
-  //       ).getPointAt(t).x as GroupData['transform'][T]
-  //     }
-  //   }
+  getGroupTransform(progress: number, groupI: number) {
+    const { t, start } = multiBezierProgressJS(progress, this.keyframes.length)
+    const makeBezier = <T extends keyof TransformData>(
+      key: T,
+      defaultOption: TransformData[T]
+    ) => {
+      const groups = range(3).map(
+        i =>
+          this.keyframes[start + i].groups[groupI].transform[key] ??
+          defaultOption
+      )
+      if (groups[0] instanceof Vector2) {
+        invariant(groups[1] instanceof Vector2 && groups[2] instanceof Vector2)
+        return new QuadraticBezierCurve(
+          v1.copy(groups[0]),
+          v2.copy(groups[1] as Vector2),
+          v3.copy(groups[2] as Vector2)
+        ).getPointAt(t) as GroupData['transform'][T]
+      } else if (typeof groups[0] === 'number') {
+        return new QuadraticBezierCurve(
+          v1.set(groups[0], 0),
+          v2.set(groups[1] as number, 0),
+          v3.set(groups[2] as number, 0)
+        ).getPointAt(t).x as GroupData['transform'][T]
+      }
+    }
 
-  //   const { rotate, translate, scale } = {
-  //     rotate: makeBezier('rotate', 0)!,
-  //     translate: makeBezier('translate', new Vector2(0, 0))!,
-  //     scale: makeBezier('scale', new Vector2(1, 1))!
-  //   }
+    const { rotate, translate, scale, origin } = {
+      rotate: makeBezier('rotate', 0)!,
+      translate: makeBezier('translate', new Vector2(0, 0))!,
+      scale: makeBezier('scale', new Vector2(1, 1))!,
+      origin: makeBezier('origin', new Vector2(0, 0))!
+    }
 
-  //   return { rotate, translate, scale }
-  // }
+    return { rotate, translate, scale, origin }
+  }
 
   interpolateFrame(keyframe: number, amount = 0.5) {
     const interpKeyframe = cloneDeep(this.keyframes[keyframe])
@@ -640,12 +641,16 @@ export default class Builder {
    * Slide the curve along itself to offset its start point.
    */
   slide(amount: number) {
+    const amt = amount < 0 ? 1 + amount : amount
     return this.lastCurve(curve => {
       const path = this.makeCurvePath(curve)
+      // const totalLength = path.getLength()
       const offset = curve[0].clone().sub(path.getPointAt(amount))
       curve.forEach(point => point.add(offset))
     })
   }
+
+  fromTransform(transform: Matrix3) {}
 
   newGroup() {
     if (this.initialized) {
@@ -715,7 +720,6 @@ export default class Builder {
     )
 
     this.reset(true)
-
     return this
   }
 
@@ -766,16 +770,15 @@ export default class Builder {
     '\t': () => this.applyTransform({ translate: [2, 0], push: true }),
     a: () =>
       this.newCurve(
-        [0, 0, { remap: [[0.8, 0.2], [0.8, 0.8], 'x'] }],
-        [-0.3, 0.5],
-        [0.5, 1],
-        [1.3, 0.5],
+        [1, 1, { scale: [0.5, 0.5] }],
+        [0.5, 1.3],
+        [0, 0.5],
+        [0.5, -0.3],
         [1, 0]
       )
-        .debug()
-        .newCurve([1.1, 0], [0.5, 0.1], [-0.1, 0])
-        .slide(0.01)
-        .within([0, 0, { reset: 'last' }], [0.5, 0.5])
+        .newCurve([0, 1, { translate: [1, 0] }], [-0.1, 0.5], [0, -0.3])
+        .slide(0.1)
+        .within([0, 0, { reset: 'last' }], [0.5, 0.6])
         .applyTransform({ translate: [0.5, 0] }),
     b: () =>
       this.newCurve([0, 1], [0, 0])
@@ -789,8 +792,15 @@ export default class Builder {
         .within([0, 0, { reset: 'last' }], [0.5, 1])
         .applyTransform({ translate: [0.5, 0] }),
     c: () =>
-      this.newCurve([1, 0.9], [0.5, 1.2], [0, 0.5], [0.5, -0.2], [1, 0])
-        .within([0, 0], [0.5, 0.5])
+      this.newCurve(
+        [1, 0.75, { scale: [0.5, 0.5] }],
+        [0.9, 1],
+        [0, 1],
+        [0, 0],
+        [0.9, 0],
+        [1, 1 - 0.75]
+      )
+        .within([0, 0, { reset: 'last' }], [0.5, 0.5])
         .applyTransform({ translate: [0.5, 0], reset: 'last' }),
     d: () =>
       this.newCurve([1, 1], [1, 0])
@@ -894,22 +904,25 @@ export default class Builder {
       ).applyTransform({ translate: [0.5, 0], reset: 'last' }),
     o: () =>
       this.newCurve(
-        [1, 0, { translate: [0.5 / 2, 0.5 / 2], scale: 1 / 4 }],
-        [1, 1],
+        [1, 0, { translate: [0.5 / 2, 0.5 / 2], scale: 1 / 4, push: true }],
+        [1, 1, { translate: [0.25, 0] }],
         [-1, 1],
         [-1, -1],
         [1, -1],
-        [1, 0]
-      ).applyTransform({ translate: [0.5, 0], reset: 'last' }),
+        [1, 0, { reset: 'pop' }]
+      )
+        .within([0, 0, { reset: 'pop' }], [0.5, 0.5])
+        .applyTransform({ translate: [0.5, 0] }),
     p: () =>
       this.newCurve([0, 0, { translate: [0, -0.5] }], [0, 1])
         .newCurve(
-          [0, 1, { translate: [0, 0.5], scale: [1, 0.5] }],
+          [0, 1, { translate: [0, 0.5], scale: [0.5, 0.5] }],
           [1, 1.3],
           [1, -0.3],
           [0, 0]
         )
-        .applyTransform({ translate: [0.5, 0], reset: 'last' }),
+        .within([0, -0.5, { reset: 'last' }], [0.5, 0.5])
+        .applyTransform({ translate: [0.5, 0] }),
     q: () =>
       this.newCurve(
         [0, 1, { translate: [0, -0.5], push: true }],

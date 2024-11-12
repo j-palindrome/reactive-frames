@@ -223,6 +223,7 @@ vec2 modifyPosition(vec2 position) {
 }
 void main() {
   vec2 aspectRatio = vec2(1, resolution.y / resolution.x);
+  vec2 pixel = vec2(1. / resolution.x, 1. / resolution.y);
   float pointProgress = pointInfo.x;
   float curveProgress = pointInfo.y;
   // find progress through keyframes and round to cycles to quadratic bezier based on curve progress
@@ -324,7 +325,7 @@ void main() {
       + jitterPosition 
       + flickerPosition
       + rotate2d(
-        position.xy * jitterSize * thisThickness, 
+        position.xy * jitterSize * thisThickness * pixel, 
         point.rotation + 1.5707 + jitterRotation) 
       / aspectRatio),
       0, 1);

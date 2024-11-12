@@ -10,17 +10,9 @@ export default function ParticlesTest() {
   const kf = new Builder(g =>
     g.text('abcdefghijklmnopqrstuvwxyz', { width: 1 })
   )
-    .to(
-      {
-        translate: [0, 0.5]
-      },
-      0
-    )
-    .groups((g, p) => {
-      p.applyTransformData(p.toTransformData({ rotate: 2 }), g.transform)
-    })
     .to({}, 0)
-[]
+    .to({}, 0)
+
   return (
     <Reactive progress={t => (t / 2) % 1}>
       <Asemic name='a'>

@@ -5,18 +5,16 @@ import {
   Data3DTexture,
   FloatType,
   LineCurve,
-  Matrix3,
   NearestFilter,
   QuadraticBezierCurve,
   RedFormat,
   RepeatWrapping,
   RGBAFormat,
-  Vector2,
-  Vector3
+  Vector2
 } from 'three'
 import { PointBuilder } from './PointBuilder'
 import { cloneDeep, last, max, min, range } from 'lodash'
-import { lerp } from '@/util/src/math'
+import { lerp, scale } from '@/util/src/math'
 import { multiBezierProgressJS } from '@/util/src/shaders/bezier'
 import { Jitter } from '../Brush'
 import invariant from 'tiny-invariant'
@@ -27,8 +25,8 @@ const v1 = new Vector2(),
 
 type TargetInfo = [number, number] | number
 export default class Builder {
-  protected transform: Matrix3 = new Matrix3()
-  protected transforms: Matrix3[] = []
+  protected transformData: TransformData = this.toTransformData({})
+  protected transforms: TransformData[] = []
   keyframes: {
     groups: GroupData[]
     transform: TransformData
@@ -38,7 +36,7 @@ export default class Builder {
   initialized = false
 
   reset(clear = false) {
-    this.transform.identity()
+    this.transformData = this.toTransformData({})
     if (clear) this.transforms = []
   }
 
@@ -103,7 +101,7 @@ export default class Builder {
   }
 
   fromPoint(point: Vector2) {
-    return point.clone().applyMatrix3(this.transform.clone().invert()).toArray()
+    return this.applyTransformData(point, this.transformData, true).toArray()
   }
 
   toTransformData(transform: CoordinateData) {
@@ -112,6 +110,24 @@ export default class Builder {
       rotate: 0,
       translate: new Vector2(0, 0),
       origin: new Vector2(0, 0)
+    }
+    if (transform.remap) {
+      v1.set(...transform.remap[0])
+      v2.set(...transform.remap[1])
+
+      const rotate = v2.clone().sub(v1).angle()
+      const scale = new Vector2(v1.distanceTo(v2), v1.distanceTo(v2))
+      const translate = v1.clone()
+
+      const tf: TransformData = {
+        scale,
+        rotate,
+        translate,
+        origin: new Vector2(0, 0)
+      }
+
+      transform.remap = undefined
+      return this.combineTransformData(tf, this.toTransformData(transform))
     }
     if (transform.translate) {
       transformData.translate.add({
@@ -134,57 +150,19 @@ export default class Builder {
     return transformData
   }
 
-  toTransform(transform: CoordinateData) {
-    const matrix = new Matrix3()
-
-    if (transform.origin) {
-      matrix.translate(transform.origin[0] * -1, transform.origin[1] * -1)
-    }
-    if (transform.scale) {
-      if (transform.scale instanceof Array) matrix.scale(...transform.scale)
-      else matrix.scale(transform.scale, transform.scale)
-    }
-    if (transform.rotate) matrix.rotate(-this.toRad(transform.rotate))
-    if (transform.origin) {
-      matrix.translate(...transform.origin)
-    }
-    if (transform.translate) {
-      matrix.translate(transform.translate[0], transform.translate[1])
-    }
-
-    if (transform.remap) {
-      const remap = new Matrix3()
-      v1.set(...transform.remap[0])
-      v2.set(...transform.remap[1])
-
-      const scale = v1.distanceTo(v2)
-      // console.log(v2.clone().sub(v1).angle() / Math.PI / 2)
-      remap.rotate(-v2.clone().sub(v1).angle())
-      if (remap[2] === 'y') {
-        remap.rotate(this.toRad(0.25))
-      }
-      remap.scale(scale, scale)
-      remap.translate(transform.remap[0][0], transform.remap[0][1])
-
-      return remap.multiply(matrix)
-    } else {
-      return matrix
-    }
-  }
-
   toPoints(...coordinates: Coordinate[]) {
     return coordinates.map(x => this.toPoint(x))
   }
+
   toPoint(coordinate: Coordinate) {
     if (coordinate[2]) {
-      this.applyTransform(coordinate[2])
+      this.transform(coordinate[2])
     }
 
-    return new PointBuilder(
-      [coordinate[0], coordinate[1]],
-      this,
-      coordinate[2]
-    ).applyMatrix3(this.transform)
+    return this.applyTransformData(
+      new PointBuilder([coordinate[0], coordinate[1]], this, coordinate[2]),
+      this.transformData
+    )
   }
 
   protected interpolateCurve(
@@ -207,15 +185,43 @@ export default class Builder {
     }
   }
 
-  applyTransformData(
-    nextTransformData: TransformData,
-    transformData: TransformData
+  combineTransformData(
+    transformData: TransformData,
+    nextTransformData: TransformData
   ) {
-    transformData.scale.multiply(nextTransformData.scale)
-    transformData.translate.add(nextTransformData.translate)
+    transformData.translate.add(
+      nextTransformData.translate
+        .multiply(transformData.scale)
+        .rotateAround(transformData.origin, transformData.rotate)
+    )
     transformData.rotate += nextTransformData.rotate
+    transformData.scale.multiply(nextTransformData.scale)
     transformData.origin.add(nextTransformData.origin)
     return transformData
+  }
+
+  applyTransformData<T extends Vector2>(
+    vector: T,
+    transformData: TransformData,
+    invert: boolean = false
+  ): T {
+    if (invert) {
+      vector
+        .sub(transformData.origin)
+        .sub(transformData.translate)
+        .rotateAround({ x: 0, y: 0 }, -transformData.rotate)
+        .divide(transformData.scale)
+        .add(transformData.origin)
+    } else {
+      vector
+        .sub(transformData.origin)
+        .multiply(transformData.scale)
+        .rotateAround({ x: 0, y: 0 }, transformData.rotate)
+        .add(transformData.translate)
+        .add(transformData.origin)
+    }
+
+    return vector
   }
 
   to(warp: CoordinateData, keyframe: number = -1) {
@@ -224,7 +230,7 @@ export default class Builder {
     this.target(undefined, -1)
 
     this.frames(f => {
-      this.applyTransformData(this.toTransformData(warp), f.transform)
+      this.combineTransformData(this.toTransformData(warp), f.transform)
     })
     return this
   }
@@ -499,13 +505,13 @@ export default class Builder {
         let scalePoint = scale
           ? this.toPoint(scale[0]).lerpRandom(this.toPoint(scale[1])).toArray()
           : undefined
-        const transform = this.toTransform({
+        const transform = this.toTransformData({
           translate: translatePoint,
           scale: scalePoint,
           rotate: rotatePoint
         })
         g.curves.flat().forEach(p => {
-          p.applyMatrix3(transform)
+          this.applyTransformData(p, transform)
         })
       },
       groups,
@@ -696,8 +702,6 @@ export default class Builder {
     })
   }
 
-  fromTransform(transform: Matrix3) {}
-
   newGroup() {
     if (this.initialized) {
       throw new Error("Can't create new groups after initialization.")
@@ -736,14 +740,14 @@ export default class Builder {
     let lineCount = 0
     for (let letter of str) {
       if (this.letters[letter]) {
-        this.applyTransform({ translate: [0.1, 0], push: true })
+        this.transform({ translate: [0.1, 0], push: true })
           .newGroup()
           .letter(letter)
       } else if (letter === '\n') {
         lineCount++
-        this.applyTransform({ reset: 'last' })
+        this.transform({ reset: 'last' })
         this.transforms.push(
-          this.toTransform({
+          this.toTransformData({
             translate: [0, -1.1 * lineCount]
           })
         )
@@ -772,51 +776,33 @@ export default class Builder {
     return this
   }
 
-  applyTransform(transform: CoordinateData) {
+  transform(transform: CoordinateData) {
     if (transform.reset) {
       switch (transform.reset) {
         case 'pop':
-          this.transform.copy(this.transforms.pop() ?? new Matrix3())
+          this.transformData = this.transforms.pop() ?? this.toTransformData({})
           break
         case 'last':
-          this.transform.copy(last(this.transforms) ?? new Matrix3())
+          this.transformData = last(this.transforms) ?? this.toTransformData({})
           break
         case true:
-          this.transform.identity()
+          this.transformData = this.toTransformData({})
           break
       }
-      if (typeof transform.reset === 'string') {
-        const xBasis = new Vector3()
-        const yBasis = new Vector3()
-        this.transform.extractBasis(xBasis, yBasis, new Vector3())
-
-        if (transform.reset.includes('rotate')) {
-          this.transform.rotate(new Vector3(1, 0, 0).angleTo(xBasis))
-        }
-        if (transform.reset.includes('scale')) {
-          this.transform.scale(1 / xBasis.length(), 1 / yBasis.length())
-        }
-        if (transform.reset.includes('translate')) {
-          this.transform.translate(
-            ...v1
-              .set(0, 0)
-              .applyMatrix3(this.transform)
-              .multiplyScalar(-1)
-              .toArray()
-          )
-        }
-      }
     }
-    this.transform.multiply(this.toTransform(transform))
+    this.transformData = this.combineTransformData(
+      this.transformData,
+      this.toTransformData(transform)
+    )
     if (transform.push) {
-      this.transforms.push(this.transform.clone())
+      this.transforms.push(cloneDeep(this.transformData))
     }
     return this
   }
 
   letters: Record<string, () => Builder> = {
-    ' ': () => this.applyTransform({ translate: [0.5, 0], push: true }),
-    '\t': () => this.applyTransform({ translate: [2, 0], push: true }),
+    ' ': () => this.transform({ translate: [0.5, 0], push: true }),
+    '\t': () => this.transform({ translate: [2, 0], push: true }),
     a: () =>
       this.newCurve(
         [1, 1, { scale: [0.5, 0.5] }],
@@ -828,7 +814,7 @@ export default class Builder {
         .newCurve([0, 1, { translate: [1, 0] }], [-0.1, 0.5], [0, -0.3])
         .slide(0.1)
         .within([0, 0, { reset: 'last' }], [0.5, 0.6])
-        .applyTransform({ translate: [0.5, 0] }),
+        .transform({ translate: [0.5, 0] }),
     b: () =>
       this.newCurve([0, 1], [0, 0])
         .newCurve(
@@ -839,7 +825,7 @@ export default class Builder {
           [0, 0]
         )
         .within([0, 0, { reset: 'last' }], [0.5, 1])
-        .applyTransform({ translate: [0.5, 0] }),
+        .transform({ translate: [0.5, 0] }),
     c: () =>
       this.newCurve(
         [1, 0.75, { scale: [0.5, 0.5] }],
@@ -850,7 +836,7 @@ export default class Builder {
         [1, 1 - 0.75]
       )
         .within([0, 0, { reset: 'last' }], [0.5, 0.5])
-        .applyTransform({ translate: [0.5, 0], reset: 'last' }),
+        .transform({ translate: [0.5, 0], reset: 'last' }),
     d: () =>
       this.newCurve([1, 1], [1, 0])
         .newCurve(
@@ -861,18 +847,18 @@ export default class Builder {
           [0, 0]
         )
         .within([0, 0, { reset: 'last' }], [0.5, 1])
-        .applyTransform({ translate: [0.5, 0] }),
+        .transform({ translate: [0.5, 0] }),
     e: () =>
       this.newCurve([0, 0.5], [1, 0.5])
         .newCurve([1, 0.5], [1, 1], [0, 1], [0, 0], [0.9, 0], [1, 0.2])
         .within([0, 0, { reset: 'last' }], [0.5, 0.5])
-        .applyTransform({ translate: [0.5, 0] }),
+        .transform({ translate: [0.5, 0] }),
     f: () =>
       this.newCurve([0, 0], [0, 1 / 2], [0, 1], [1 / 2, 1], [1 / 2, 0.75])
         .newCurve([0, 1 / 2], [1 / 2, 1 / 2])
         .slide(1 / 4)
         .within([0, 0, { reset: 'last' }], [1 / 2, 1])
-        .applyTransform({ translate: [0.35, 0] }),
+        .transform({ translate: [0.35, 0] }),
     g: () =>
       this.newCurve(
         [0.5, 0.5],
@@ -884,13 +870,13 @@ export default class Builder {
       )
         .newCurve([0.5, 0.5], [0.5, 0], [0.5, -0.5], [0, -0.5], [0.05, -0.25])
         .within([0, -0.5], [0.5, 0.5])
-        .applyTransform({ translate: [0.5, 0] }),
+        .transform({ translate: [0.5, 0] }),
     h: () =>
       this.newCurve([0, 0], [0, 1])
         .newCurve([0, 0.6, { scale: [0.5, 0.7] }], [1, 1], [1, 0])
-        .applyTransform({ translate: [0.5, 0], reset: 'last' }),
+        .transform({ translate: [0.5, 0], reset: 'last' }),
     i: () =>
-      this.applyTransform({ translate: [0.2, 0] })
+      this.transform({ translate: [0.2, 0] })
         .newCurve([0, 0], [0, 1, { scale: [1, 0.5] }])
         .newCurve(
           [0, 0, { translate: [0, 1.2], scale: [0.05 / 2, 0.05 / 0.5] }],
@@ -900,16 +886,16 @@ export default class Builder {
           [1, 0],
           [0, 0]
         )
-        .applyTransform({ translate: [0.2, 0], reset: 'last' }),
+        .transform({ translate: [0.2, 0], reset: 'last' }),
     j: () =>
-      this.applyTransform({ translate: [-0.25, 0] })
+      this.transform({ translate: [-0.25, 0] })
         .newCurve(
           [0, 0, { translate: [1, 1], scale: [0.7, 1], rotate: 0.05 }],
           [0, -1],
           [-1, -1],
           [-1, -0.5]
         )
-        .applyTransform({ rotate: -0.05 })
+        .transform({ rotate: -0.05 })
         .newCurve(
           [
             0,
@@ -926,7 +912,7 @@ export default class Builder {
           [0, 0]
         )
         .within([0, -0.5, { reset: 'last' }], [0.5, 0.5])
-        .applyTransform({ translate: [0.5, 0], reset: 'last' }),
+        .transform({ translate: [0.5, 0], reset: 'last' }),
     k: () =>
       this.newCurve([0, 1], [0, 0])
         .newCurve(
@@ -935,22 +921,22 @@ export default class Builder {
         )
         .newCurve([0, 0, { reset: 'pop' }], [0.3, 0, { reset: 'last' }])
         .within([0, 0], [0.5, 1])
-        .applyTransform({ translate: [0.5, 0] }),
+        .transform({ translate: [0.5, 0] }),
     l: () =>
-      this.newCurve([0, 1], [0, 0.2], [0, 0], [0.1, 0]).applyTransform({
+      this.newCurve([0, 1], [0, 0.2], [0, 0], [0.1, 0]).transform({
         translate: [0.2, 0]
       }),
     m: () =>
       this.newCurve([0, 0, { scale: [0.5, 0.5] }], [0, 1], [1, 1], [1, 0])
         .newCurve([0, 0, { translate: [1, 0] }], [0, 1], [1, 1], [1, 0])
-        .applyTransform({ translate: [1, 0], reset: 'last' }),
+        .transform({ translate: [1, 0], reset: 'last' }),
     n: () =>
       this.newCurve(
         [0, 0, { scale: [0.5, 0.5] }],
         [0, 1],
         [1, 1],
         [1, 0]
-      ).applyTransform({ translate: [0.5, 0], reset: 'last' }),
+      ).transform({ translate: [0.5, 0], reset: 'last' }),
     o: () =>
       this.newCurve(
         [1, 0, { translate: [0.5 / 2, 0.5 / 2], scale: 1 / 4, push: true }],
@@ -961,7 +947,7 @@ export default class Builder {
         [1, 0, { reset: 'pop' }]
       )
         .within([0, 0, { reset: 'pop' }], [0.5, 0.5])
-        .applyTransform({ translate: [0.5, 0] }),
+        .transform({ translate: [0.5, 0] }),
     p: () =>
       this.newCurve([0, 0, { translate: [0, -0.5] }], [0, 1])
         .newCurve(
@@ -971,7 +957,7 @@ export default class Builder {
           [0, 0]
         )
         .within([0, -0.5, { reset: 'last' }], [0.5, 0.5])
-        .applyTransform({ translate: [0.5, 0] }),
+        .transform({ translate: [0.5, 0] }),
     q: () =>
       this.newCurve(
         [0, 1, { translate: [0, -0.5], push: true }],
@@ -986,7 +972,7 @@ export default class Builder {
         )
         .within([0, -0.5, { reset: 'last' }], [0.5, 0.5])
         .debug()
-        .applyTransform({ translate: [0.5, 0] }),
+        .transform({ translate: [0.5, 0] }),
     r: () =>
       this.newCurve([0, 0], [0, 0.5])
         .newCurve(
@@ -994,38 +980,47 @@ export default class Builder {
           [0.25, 0.1],
           [0.5, 0]
         )
-        .applyTransform({ translate: [0.5, 0], reset: 'last' }),
+        .transform({ translate: [0.5, 0], reset: 'last' }),
     s: () =>
-      this.applyTransform({ remap: [[0.2, 0.5], [0.2, 0], 'x'], push: true })
-        .newCurve(
-          [0, 0, { scale: [0.4, -0.4] }],
-          [0, 1],
-          [1, 1],
-          [0, 0, { reset: 'pop', translate: [0.4, 0], scale: [0.6, 0.6] }],
-          [0, 1],
-          [1, 1],
-          [1, 0]
-        )
+      this.newCurve(
+        [
+          0,
+          0,
+          {
+            remap: [
+              [0.2, 0.5],
+              [0.2, 0]
+            ],
+            push: true
+          }
+        ],
+        [0, 1, { scale: [0.4, -0.4] }],
+        [1, 1],
+        [0, 0, { reset: 'pop', translate: [0.4, 0], scale: [0.6, 0.6] }],
+        [0, 1],
+        [1, 1],
+        [1, 0]
+      )
         // .within([0, 0, { reset: 'last' }], [0.5, 1])
-        .applyTransform({ translate: [0.6, 0], reset: 'last' }),
+        .transform({ translate: [0.6, 0], reset: 'last' }),
     t: () =>
       this.newCurve([0, 0], [0, 1])
         .newCurve([0, 0, { translate: [0, 0.65], scale: [0.4, 1] }], [1, 0])
         .slide(0.5)
-        .applyTransform({ translate: [0.2, 0], reset: 'last' }),
+        .transform({ translate: [0.2, 0], reset: 'last' }),
     u: () =>
       this.newCurve(
         [0, 0, { translate: [0, 0.5], scale: [0.5, 0.5] }],
         [0, -1],
         [1, -1],
         [1, 0]
-      ).applyTransform({ translate: [0.5, 0], reset: 'last' }),
+      ).transform({ translate: [0.5, 0], reset: 'last' }),
     v: () =>
       this.newCurve(
         [0, 0, { translate: [0, 0.5], scale: [0.5, 0.5] }],
         [0.5, -1, { strength: 1 }],
         [1, 0]
-      ).applyTransform({ translate: [0.5, 0], reset: 'last' }),
+      ).transform({ translate: [0.5, 0], reset: 'last' }),
     w: () =>
       this.newCurve(
         [0, 0, { translate: [0, 0.5], scale: [0.4, 0.7] }],
@@ -1033,22 +1028,22 @@ export default class Builder {
         [0, 0, { translate: [1, 0], strength: 1 }],
         [0.5, -1, { strength: 1 }],
         [1, 0]
-      ).applyTransform({ translate: [0.8, 0], reset: 'last' }),
+      ).transform({ translate: [0.8, 0], reset: 'last' }),
     x: () =>
       this.newCurve([1, 1, { translate: [0.25, 0.25], scale: 0.25 }], [-1, -1])
         .newCurve([-1, 1], [1, -1])
-        .applyTransform({ translate: [0.5, 0], reset: 'last' }),
+        .transform({ translate: [0.5, 0], reset: 'last' }),
     y: () =>
       this.newCurve([0, -1, { scale: [0.5, 0.5] }], [1, 1])
         .newCurve([0.5, 0], [0, 1])
-        .applyTransform({ translate: [0.5, 0], reset: 'last' }),
+        .transform({ translate: [0.5, 0], reset: 'last' }),
     z: () =>
       this.newCurve(
         [0, 1, { scale: 0.5 }],
         [1, 1, { strength: 1 }],
         [0, 0, { strength: 1 }],
         [1, 0]
-      ).applyTransform({ translate: [0.5, 0], reset: 'last' })
+      ).transform({ translate: [0.5, 0], reset: 'last' })
   }
 
   constructor(initialize: (builder: Builder) => Builder) {

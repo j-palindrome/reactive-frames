@@ -14,21 +14,12 @@ declare global {
 
   type CoordinateTransform = {
     push?: true
-    reset?:
-      | true
-      | 'last'
-      | 'pop'
-      | 'rotate'
-      | 'scale'
-      | 'translate'
-      | 'scale & rotate'
-      | 'translate & scale'
-      | 'translate & rotate'
+    reset?: true | 'last' | 'pop'
     translate?: [number, number]
     scale?: [number, number] | number
     rotate?: number
     origin?: [number, number]
-    remap?: [[number, number], [number, number], 'x' | 'y']
+    remap?: [[number, number], [number, number]]
   }
 
   type CoordinateData = CoordinateTransform & {

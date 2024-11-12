@@ -2,11 +2,16 @@ import { cloneDeep } from 'lodash'
 import { Canvas2D, Reactive } from '../../src'
 import Asemic from '../../src/asemic/Asemic'
 import Brush from '../../src/asemic/Brush'
-import { KeyframeBuilder } from '../../src/asemic/drawingSystem/KeyframeBuilder'
+import Builder from '../../src/asemic/drawingSystem/Builder'
 
 export default function ParticlesTest() {
   // abcdefghijklmnopqrstuvwxyz
-  const kf = new KeyframeBuilder(g => g.text('a poem in space'))
+  // a poem in space
+  const kf = new Builder(g =>
+    g
+      .applyTransform({ translate: [0, 0.5], push: true })
+      .text('qrstuvwxyz', { width: 0.5 })
+  )
     .to({}, 0)
     .to({}, 0)
 
@@ -17,8 +22,8 @@ export default function ParticlesTest() {
           keyframes={kf}
           name='b'
           defaults={{
-            size: [0.25, 0.25],
-            a: 25
+            size: [1 / 100, 1 / 100],
+            a: 0.01
           }}
           loop
         />

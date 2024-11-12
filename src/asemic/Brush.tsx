@@ -16,7 +16,7 @@ import { ChildComponent } from '../blocks/FrameChildComponents'
 import { ChildProps } from '../types'
 import FeedbackTexture, { FeedbackTextureRef } from './FeedbackTexture'
 import { Mesh } from '../frames/CanvasGL'
-import { KeyframeBuilder } from './drawingSystem/KeyframeBuilder'
+import Builder from './drawingSystem/Builder'
 
 const targetVector = new THREE.Vector2()
 
@@ -42,7 +42,7 @@ export type BrushSettings = {
   modifyPosition?: string
   includes?: string
   loop?: boolean
-  keyframes: KeyframeBuilder
+  keyframes: Builder
 }
 
 export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
@@ -138,13 +138,15 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
           >
           child.material.uniforms.progress.value = progress
           child.material.uniformsNeedUpdate = true
-          const { translate, scale, rotate, origin } =
-            keyframes.getGroupTransform(progress, i)
-          child.material.uniforms.origin.value = origin
+          // const { translate, scale, rotate } = keyframes.getGroupTransform(
+          //   progress,
+          //   i
+          // )
+          // child.material.uniforms.origin.value = origin
 
-          if (Math.random() < 0.02) console.log(origin.x, origin.y)
+          // if (Math.random() < 0.02) console.log(origin.x, origin.y)
 
-          child.position.set(translate.x + origin.x, translate.y + origin.y, 0)
+          // child.position.set(translate.x + origin.x, translate.y + origin.y, 0)
           // child.scale.set(scale.x, scale.y, 1)
           // child.rotation.set(0, 0, rotate)
           child.matrixAutoUpdate = true
@@ -178,7 +180,6 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
                 resolution: { value: resolution },
                 defaults: { value: defaults },
                 progress: { value: 0 },
-                grid: { value: new Vector2(100, 100) },
                 origin: { value: new Vector2(0, 0) }
               }}
               vertexShader={
@@ -205,7 +206,6 @@ uniform Jitter jitter;
 uniform Jitter flicker;
 uniform Jitter defaults;
 uniform float progress;
-uniform vec2 grid;
 uniform vec2 origin;
 
 out vec2 vUv;
@@ -280,12 +280,10 @@ void main() {
     }
   }
   // adjust to interpolate between things
-  if (pointCurveProgress.x == 0.) {
-    points[2] = mix(points[1], points[2], 0.5);
-  } else if (pointCurveProgress.x == controlPointsCount - 3.) {
+  if (pointCurveProgress.x > 0.) {
     points[0] = mix(points[0], points[1], 0.5);
-  } else {
-    points[0] = mix(points[0], points[1], 0.5);
+  } 
+  if (pointCurveProgress.x < controlPointsCount - 3.) {
     points[2] = mix(points[1], points[2], 0.5);
   }
   BezierPoint point = bezierPoint(pointCurveProgress.y, 
@@ -295,16 +293,16 @@ void main() {
     colorTex, 
     vec3(pointProgress, curveProgress, progress));
   vColor.a *= 1. 
-    - flicker.a / grid.x
-    + hash(1., .385 + progress) * flicker.a / grid.x;
+    - flicker.a
+    + hash(1., .385 + progress) * flicker.a;
   float thisThickness = texture(
     thicknessTex, 
     vec3(pointProgress, curveProgress, progress)).x;
 
-  vec2 jitterPosition = jitter.position / grid
+  vec2 jitterPosition = jitter.position
     * (vec2(hash(point.position.x, .184 + progress), 
       hash(point.position.y, .182 + progress)) - 0.5);
-  vec2 flickerPosition = flicker.position / grid.x 
+  vec2 flickerPosition = flicker.position
     * vec2(hash(1., .396 + progress), 
       hash(1., .281 + progress));
   vec2 jitterSize = 1. + jitter.size / defaults.size
@@ -328,7 +326,7 @@ void main() {
       + rotate2d(
         position.xy * jitterSize * thisThickness, 
         point.rotation + 1.5707 + jitterRotation) 
-        / grid / aspectRatio),
+      / aspectRatio),
       0, 1);
 }
 `
@@ -344,7 +342,7 @@ vec4 processColor (vec4 color, vec2 uv) {
   ${fragmentShader}
 }
 void main() {
-  gl_FragColor = processColor(vColor, vUv);
+  gl_FragColor = processColor(vec4(v_test, 1, 1, 1), vUv);
 }`
               }
             />

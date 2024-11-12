@@ -1,6 +1,5 @@
 import { Vector2 } from 'three'
 import Builder from './Builder'
-import NewBuilder from './NewBuilder'
 const vector = new Vector2()
 const vector2 = new Vector2()
 
@@ -9,11 +8,11 @@ export class PointBuilder extends Vector2 {
   color?: [number, number, number]
   alpha?: number
   thickness?: number
-  parent: NewBuilder
+  parent: Builder
 
   constructor(
     point: [number, number],
-    parent: NewBuilder,
+    parent: Builder,
     {
       strength = 0,
       color,

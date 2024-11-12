@@ -5,28 +5,40 @@ import Builder from './drawingSystem/Builder'
 declare global {
   type Coordinate = [number, number, CoordinateData] | [number, number]
 
-  type CoordinateData = {
-    action?: 'push' | 'pop' | 'reset' | 'clear'
-    origin?: [number, number]
-    translate?: [number, number]
-    scale?: [number, number]
-    rotate?: number
-    strength?: number
-    thickness?: number
-  }
   type TransformData = {
-    origin?: Vector2
+    translate?: Vector2
     scale?: Vector2
     rotate?: number
-    translate?: Vector2
   }
+
+  type CoordinateTransform = {
+    push?: true
+    reset?:
+      | true
+      | 'last'
+      | 'pop'
+      | 'rotate'
+      | 'scale'
+      | 'translate'
+      | 'scale & rotate'
+      | 'translate & scale'
+      | 'translate & rotate'
+    translate?: [number, number]
+    scale?: [number, number] | number
+    rotate?: number
+    origin?: [number, number]
+    remap?: [[number, number], [number, number], 'x' | 'y']
+  }
+
+  type CoordinateData = CoordinateTransform & {
+    strength?: number
+    thickness?: number
+    color?: [number, number, number]
+    alpha?: number
+  }
+
   type GroupData = {
     curves: PointBuilder[][]
-    transform: {
-      translate?: Vector2
-      rotate?: number
-      scale?: Vector2
-      origin?: Vector2
-    }
+    transform: CoordinateData
   }
 }

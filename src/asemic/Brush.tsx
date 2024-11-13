@@ -124,6 +124,7 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
   }, [resolution, curveCount])
 
   const meshRef = useRef<THREE.Group>(null!)
+
   return (
     <ChildComponent
       options={{ ...props }}
@@ -131,11 +132,15 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
         return meshRef.current
       }}
       defaultDraw={(self, frame, progress, ctx) => {
-        const frameTransform = keyframes.getFrameTransform(progress)
+        const frameTransform = keyframes.getTransformAt(
+          (p, i) => p.keyframes[i].transform,
+          progress,
+          loop
+        )
+
         self.rotation.set(0, 0, frameTransform.rotate)
         self.scale.set(...frameTransform.scale.toArray(), 1)
         self.position.set(...frameTransform.translate.toArray(), 0)
-        // console.log(frameTransform.translate)
 
         self.children.forEach((c, i) => {
           const child = c as THREE.InstancedMesh<
@@ -144,11 +149,14 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
           >
           child.material.uniforms.progress.value = progress
           child.material.uniformsNeedUpdate = true
-          const { translate, scale, rotate, origin } =
-            keyframes.getGroupTransform(progress, i)
-
-          child.material.uniforms.origin.value = origin
-          child.position.set(translate.x + origin.x, translate.y + origin.y, 0)
+          const { translate, scale, rotate } = keyframes.getTransformAt(
+            (p, j) => p.keyframes[j].groups[i].transform,
+            progress,
+            loop
+          )
+          const scaleUniform: Vector2 = child.material.uniforms.scale.value
+          scaleUniform.set(1, 1).multiply(self.scale).multiply(scale)
+          child.position.set(translate.x, translate.y, 0)
           child.scale.set(scale.x, scale.y, 1)
           child.rotation.set(0, 0, rotate)
         })
@@ -181,7 +189,7 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
                 resolution: { value: resolution },
                 defaults: { value: defaults },
                 progress: { value: 0 },
-                origin: { value: new Vector2(0, 0) }
+                scale: { value: new Vector2(1, 1) }
               }}
               vertexShader={
                 /*glsl*/ `
@@ -207,7 +215,7 @@ uniform Jitter jitter;
 uniform Jitter flicker;
 uniform Jitter defaults;
 uniform float progress;
-uniform vec2 origin;
+uniform vec2 scale;
 
 out vec2 vUv;
 out vec4 vColor;
@@ -328,8 +336,7 @@ void main() {
       + rotate2d(
         position.xy * jitterSize * thisThickness * pixel, 
         point.rotation + 1.5707 + jitterRotation) 
-        / aspectRatio
-      - origin),
+        / aspectRatio / scale),
       0, 1);
 }
 `

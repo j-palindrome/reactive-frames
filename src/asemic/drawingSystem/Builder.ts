@@ -22,6 +22,7 @@ import invariant from 'tiny-invariant'
 const v1 = new Vector2(),
   v2 = new Vector2(),
   v3 = new Vector2()
+const curveCache = new QuadraticBezierCurve()
 
 type TargetInfo = [number, number] | number
 export default class Builder {
@@ -92,7 +93,6 @@ export default class Builder {
     if (group < 0) group += this.keyframes[frame].groups.length
     if (curve < 0) curve += this.keyframes[frame].groups[group].curves.length
     if (progress < 0) progress += 1
-    console.log(this.keyframes[frame].groups[group].curves[curve])
 
     const curvePath = this.makeCurvePath(
       this.keyframes[frame].groups[group].curves[curve]
@@ -108,8 +108,7 @@ export default class Builder {
     const transformData: TransformData = {
       scale: new Vector2(1, 1),
       rotate: 0,
-      translate: new Vector2(0, 0),
-      origin: new Vector2(0, 0)
+      translate: new Vector2(0, 0)
     }
     if (transform.remap) {
       v1.set(...transform.remap[0])
@@ -122,8 +121,7 @@ export default class Builder {
       const tf: TransformData = {
         scale,
         rotate,
-        translate,
-        origin: new Vector2(0, 0)
+        translate
       }
 
       transform.remap = undefined
@@ -192,11 +190,10 @@ export default class Builder {
     transformData.translate.add(
       nextTransformData.translate
         .multiply(transformData.scale)
-        .rotateAround(transformData.origin, transformData.rotate)
+        .rotateAround({ x: 0, y: 0 }, transformData.rotate)
     )
     transformData.rotate += nextTransformData.rotate
     transformData.scale.multiply(nextTransformData.scale)
-    transformData.origin.add(nextTransformData.origin)
     return transformData
   }
 
@@ -207,18 +204,14 @@ export default class Builder {
   ): T {
     if (invert) {
       vector
-        .sub(transformData.origin)
         .sub(transformData.translate)
         .rotateAround({ x: 0, y: 0 }, -transformData.rotate)
         .divide(transformData.scale)
-        .add(transformData.origin)
     } else {
       vector
-        .sub(transformData.origin)
         .multiply(transformData.scale)
         .rotateAround({ x: 0, y: 0 }, transformData.rotate)
         .add(transformData.translate)
-        .add(transformData.origin)
     }
 
     return vector
@@ -230,7 +223,7 @@ export default class Builder {
     this.target(undefined, -1)
 
     this.frames(f => {
-      this.combineTransformData(this.toTransformData(warp), f.transform)
+      this.combineTransformData(f.transform, this.toTransformData(warp))
     })
     return this
   }
@@ -259,15 +252,22 @@ export default class Builder {
               this.interpolateCurve(curve, controlPointsCount)
             }
 
+            // const mappedCurve = curve
+            const mappedCurve = curve.map(x =>
+              x.clone().multiply(group.transform.scale)
+            )
+
             const curvePath = new CurvePath()
             const segments: Curve<Vector2>[] = []
             range(subdivisions).forEach(i => {
               const thisCurve = new QuadraticBezierCurve(
-                i === 0 ? curve[i] : curve[i].clone().lerp(curve[i + 1], 0.5),
-                curve[i + 1],
+                i === 0
+                  ? mappedCurve[i]
+                  : mappedCurve[i].clone().lerp(mappedCurve[i + 1], 0.5),
+                mappedCurve[i + 1],
                 i === subdivisions - 1
-                  ? curve[i + 2]
-                  : curve[i + 1].clone().lerp(curve[i + 2], 0.5)
+                  ? mappedCurve[i + 2]
+                  : mappedCurve[i + 1].clone().lerp(mappedCurve[i + 2], 0.5)
               )
               curvePath.add(thisCurve)
               segments.push(thisCurve)
@@ -337,58 +337,57 @@ export default class Builder {
     }
   }
 
-  curveInterpolate(groups: Vector2[] | number[], t: number) {
-    if (groups[0] instanceof Vector2) {
-      invariant(groups[1] instanceof Vector2 && groups[2] instanceof Vector2)
-      return new QuadraticBezierCurve(
-        v1.copy(groups[0]),
-        v2.copy(groups[1] as Vector2),
-        v3.copy(groups[2] as Vector2)
-      ).getPointAt(t)
-    } else if (typeof groups[0] === 'number') {
-      return new QuadraticBezierCurve(
-        v1.set(groups[0], 0),
-        v2.set(groups[1] as number, 0),
-        v3.set(groups[2] as number, 0)
-      ).getPointAt(t).x
-    }
-  }
-
-  getFrameTransform(progress: number) {
-    const { t, start } = multiBezierProgressJS(progress, this.keyframes.length)
-
-    const makeBezier = <T extends keyof TransformData>(key: T) => {
-      const groups = range(3).map(i => this.keyframes[start + i].transform[key])
-      return this.curveInterpolate(groups as any[], t)
-    }
-
-    const { rotate, translate, scale, origin } = {
-      rotate: makeBezier('rotate'),
-      translate: makeBezier('translate'),
-      scale: makeBezier('scale'),
-      origin: makeBezier('origin')
+  getTransformAt(
+    getTransform: (self: this, i: number) => TransformData,
+    progress: number,
+    loop: boolean = false
+  ) {
+    const curveInterpolate = <T extends Vector2 | number>(
+      groups: T[],
+      t: number,
+      { isStart, isEnd }: { isStart: boolean; isEnd: boolean }
+    ) => {
+      if (groups[0] instanceof Vector2) {
+        invariant(groups[1] instanceof Vector2 && groups[2] instanceof Vector2)
+        curveCache.v0.copy(groups[0])
+        curveCache.v1.copy(groups[1])
+        curveCache.v2.copy(groups[2])
+        if (!isStart) curveCache.v0.lerp(curveCache.v1, 0.5)
+        if (!isEnd) curveCache.v2.lerp(curveCache.v1, 0.5)
+        return curveCache.getPoint(t)
+      } else if (typeof groups[0] === 'number') {
+        curveCache.v0.set(0, groups[0])
+        curveCache.v1.set(0, groups[1] as number)
+        curveCache.v2.set(0, groups[2] as number)
+        if (!isStart) curveCache.v0.lerp(curveCache.v1, 0.5)
+        if (!isEnd) curveCache.v2.lerp(curveCache.v1, 0.5)
+        return curveCache.getPoint(t).y
+      }
     }
 
-    return { rotate, translate, scale, origin } as TransformData
-  }
+    const { t, start } = multiBezierProgressJS(
+      progress,
+      loop ? this.keyframes.length + 2 : this.keyframes.length
+    )
 
-  getGroupTransform(progress: number, groupI: number) {
-    const { t, start } = multiBezierProgressJS(progress, this.keyframes.length)
     const makeBezier = <T extends keyof TransformData>(key: T) => {
       const groups = range(3).map(
-        i => this.keyframes[start + i].groups[groupI].transform[key]
+        i => getTransform(this, (start + i) % this.keyframes.length)[key]
       )
-      return this.curveInterpolate(groups as any[], t)
+
+      return curveInterpolate(groups, t, {
+        isStart: !loop && t === 0,
+        isEnd: !loop && t === this.keyframes.length - 3
+      })
     }
 
-    const { rotate, translate, scale, origin } = {
+    const { rotate, translate, scale } = {
       rotate: makeBezier('rotate'),
       translate: makeBezier('translate'),
-      scale: makeBezier('scale'),
-      origin: makeBezier('origin')
+      scale: makeBezier('scale')
     }
 
-    return { rotate, translate, scale, origin } as TransformData
+    return { rotate, translate, scale } as TransformData
   }
 
   interpolateFrame(keyframe: number, amount = 0.5) {
@@ -447,11 +446,15 @@ export default class Builder {
     return path
   }
 
-  getBounds(points: PointBuilder[]) {
+  getBounds(points: PointBuilder[], transform?: TransformData) {
     const flatX = points.map(x => x.x)
     const flatY = points.map(y => y.y)
     const minCoord = new Vector2(min(flatX)!, min(flatY)!)
     const maxCoord = new Vector2(max(flatX)!, max(flatY)!)
+    if (transform) {
+      this.applyTransformData(minCoord, transform)
+      this.applyTransformData(maxCoord, transform)
+    }
     return {
       min: minCoord,
       max: maxCoord,
@@ -464,7 +467,7 @@ export default class Builder {
     const curve = this.makeCurvePath(points.map(x => this.toPoint(x)))
     return this.groups((g, p, { groupProgress }) => {
       const curveProgress = curve.getPointAt(groupProgress)
-      const { min } = this.getBounds(g.curves.flat())
+      const { min } = this.getBounds(g.curves.flat(), g.transform)
       g.curves.flat().forEach(p => {
         p.add({ x: curveProgress.x - min[0], y: curveProgress.y - min[1] })
       })
@@ -578,7 +581,7 @@ export default class Builder {
           keyframeProgress,
           groupProgress,
           curveProgress: i / group.curves.length,
-          bounds: this.getBounds(curve)
+          bounds: this.getBounds(group.curves.flat())
         })
       )
     })
@@ -639,20 +642,24 @@ export default class Builder {
         .map(x =>
           x.groups
             .slice(this.targetGroups[0], this.targetGroups[1] + 1)
-            .map(g =>
-              g.curves
-                .map(c =>
-                  c
-                    .map(
-                      p =>
-                        `${p
-                          .toArray()
-                          .map(p => p.toFixed(2))
-                          .join(',')}`
-                    )
-                    .join(' ')
-                )
-                .join('\n')
+            .map(
+              g =>
+                `*${g.transform.scale.toArray().map(x => x.toFixed(2))} @${
+                  g.transform.rotate / Math.PI / 2
+                } +${g.transform.translate.toArray().map(x => x.toFixed(2))}
+${g.curves
+  .map(c =>
+    c
+      .map(
+        p =>
+          `${p
+            .toArray()
+            .map(p => p.toFixed(2))
+            .join(',')}`
+      )
+      .join(' ')
+  )
+  .join('\n')}`
             )
             .join('\n\n')
         )
@@ -674,8 +681,7 @@ export default class Builder {
     this.groups(g => {
       const curves = g.curves.flat()
       const bounds = this.getBounds(curves)
-
-      curves.flat().forEach(p => {
+      curves.forEach(p => {
         p.sub(bounds.min).divide(bounds.size).multiply(size).add(fromV)
       })
     })
@@ -683,7 +689,7 @@ export default class Builder {
     return this
   }
 
-  lastCurve(callback: (curve: PointBuilder[]) => void) {
+  protected lastCurve(callback: (curve: PointBuilder[]) => void) {
     return this.groups(group => {
       callback(group.curves[group.curves.length - 1])
     })
@@ -708,8 +714,14 @@ export default class Builder {
     }
     this.keyframes[0].groups.push({
       curves: [],
-      transform: this.toTransformData({})
+      transform: this.combineTransformData(
+        cloneDeep(last(this.keyframes[0].groups)?.transform) ??
+          this.toTransformData({}),
+        this.transformData
+      )
     })
+
+    this.reset(true)
     this.target(-1)
     return this
   }
@@ -740,39 +752,31 @@ export default class Builder {
     let lineCount = 0
     for (let letter of str) {
       if (this.letters[letter]) {
-        this.transform({ translate: [0.1, 0], push: true })
+        this.transform({ translate: [0.1, 0] })
           .newGroup()
           .letter(letter)
       } else if (letter === '\n') {
         lineCount++
-        this.transform({ reset: 'last' })
-        this.transforms.push(
-          this.toTransformData({
-            translate: [0, -1.1 * lineCount]
-          })
-        )
+        this.transform({
+          translate: [0, -1.1 * lineCount]
+        })
       }
     }
 
     const maxX = max(
-      this.keyframes[0].groups
-        .flatMap(x => x.curves)
-        .flat()
-        .map(x => x.x)
-    )
+      this.keyframes[0].groups.map(g => {
+        return this.getBounds(g.curves.flat(), g.transform).max.x
+      })
+    )!
+    this.reset(true)
     this.groups(
-      group =>
-        group.curves
-          .flat()
-          .forEach(point =>
-            point
-              .multiplyScalar(width / maxX!)
-              .add({ x: origin[0], y: origin[1] })
-          ),
+      group => {
+        group.transform.translate.multiplyScalar(width / maxX)
+        group.transform.scale.multiplyScalar(width / maxX)
+        group.transform.translate.add(this.toPoint(origin))
+      },
       [0, -1]
     )
-
-    this.reset(true)
     return this
   }
 
@@ -813,7 +817,7 @@ export default class Builder {
       )
         .newCurve([0, 1, { translate: [1, 0] }], [-0.1, 0.5], [0, -0.3])
         .slide(0.1)
-        .within([0, 0, { reset: 'last' }], [0.5, 0.6])
+        .within([0, 0, { reset: true }], [0.5, 0.6])
         .transform({ translate: [0.5, 0] }),
     b: () =>
       this.newCurve([0, 1], [0, 0])

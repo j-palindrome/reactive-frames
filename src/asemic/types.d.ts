@@ -9,7 +9,6 @@ declare global {
     translate: Vector2
     scale: Vector2
     rotate: number
-    origin: Vector2
   }
 
   type CoordinateTransform = {

@@ -52,9 +52,12 @@ export default class Builder {
   }
 
   // the next ones being built (asynchronously)
-  protected keyframesList: [FrameData[], FrameData[]] = [[], []]
+  protected keyframesList: [FrameData[], FrameData[]] = [
+    [cloneDeep(this.defaultKeyframe)],
+    []
+  ]
   protected keyframes = this.keyframesList[0]
-  lastKeyframes = this.keyframesList[1]
+  keyframeData = this.keyframesList[1]
   protected keyframeIndex = 0
   protected targetGroups: [number, number] = [0, 0]
   protected targetFrames: [number, number] = [0, 0]
@@ -1341,9 +1344,29 @@ ${g.curves
   }
 }
 
+type TextureData = {
+  keyframesTex: Data3DTexture
+  colorTex: Data3DTexture
+  thicknessTex: Data3DTexture
+  curveLengths: number[][]
+  controlPointsCount: number
+  keyframeCount: number
+  keyframeInfo: { duration: number; start: number; strength: number }[]
+}
+
 export class Built extends Builder {
-  packToTexture(defaults: Jitter) {
-    const keyframes = this.lastKeyframes
+  texturesList: [TextureData, TextureData]
+  textureData: TextureData
+
+  protected packToTexture(keyframes: FrameData[]) {
+    const defaults: Required<Jitter> = {
+      a: 1,
+      hsl: [1, 1, 1],
+      size: [1, 1],
+      position: [0, 0],
+      rotation: 0
+    }
+
     this.reset(true)
     const keyframeCount = keyframes.length
     const curveCounts = keyframes[0].groups.flatMap(x => x.curves).length
@@ -1415,7 +1438,6 @@ export class Built extends Builder {
           )
         })
       )
-
       const tex = new Data3DTexture(
         array,
         controlPointsCount,
@@ -1435,7 +1457,7 @@ export class Built extends Builder {
     }, RGBAFormat)
 
     const colorTex = createTexture(
-      point => [...(point.color ?? defaults.hsl!), point.alpha ?? defaults.a!],
+      point => [...(point.color ?? defaults.hsl), point.alpha ?? defaults.a],
       RGBAFormat
     )
 
@@ -1462,6 +1484,7 @@ export class Built extends Builder {
       }
     })
 
+    // take the same place as the LastTexture in the list
     return {
       keyframesTex,
       colorTex,
@@ -1473,12 +1496,10 @@ export class Built extends Builder {
     }
   }
 
-  async reInitialize() {
-    this.keyframeIndex = this.keyframeIndex ? 0 : 1
-    this.keyframes = this.keyframesList[this.keyframeIndex]
-    this.lastKeyframes = this.keyframesList[this.keyframeIndex ? 0 : 1]
+  async reinit() {
+    await null
 
-    const lastKeyframe = last(this.lastKeyframes)!
+    const lastKeyframe = last(this.keyframeData)!
     this.keyframes.splice(
       0,
       this.keyframes.length,
@@ -1490,6 +1511,18 @@ export class Built extends Builder {
     if (lastKeyframe.groups[0].curves[0].length > 0) {
       this.keyframes[0] = lastKeyframe
     }
+    // replace the keyframes texture with this
+    this.texturesList[this.keyframeIndex] = this.packToTexture(this.keyframes)
+  }
+
+  reInitialize() {
+    // switch the output to the last keyframe index
+    this.keyframeData = this.keyframesList[this.keyframeIndex]
+    this.textureData = this.texturesList[this.keyframeIndex]
+    this.keyframeIndex = this.keyframeIndex ? 0 : 1
+    this.keyframes = this.keyframesList[this.keyframeIndex]
+
+    this.reinit()
   }
 
   protected parseDict: Record<string, ParserData> = {
@@ -1507,14 +1540,12 @@ export class Built extends Builder {
   constructor(b: Builder) {
     // @ts-expect-error
     super(b.initialize, b.settings)
-    this.keyframes.splice(
-      0,
-      this.keyframes.length,
-      cloneDeep(this.defaultKeyframe)
-    )
 
-    this.target({ groups: [0, 0], frames: [0, 0] })
     this.initialize(this)
+    const textureData = this.packToTexture(this.keyframes)
+    this.texturesList = [textureData, textureData]
+    this.textureData = textureData
+
     this.reInitialize()
   }
 }

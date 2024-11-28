@@ -1,11 +1,29 @@
 import { FrameComponent } from '../blocks/FrameChildComponents'
 import { Canvas } from '@react-three/fiber'
-import { Children, createContext, useRef } from 'react'
+import { Children, createContext, useEffect, useRef } from 'react'
 import { ParentProps } from '../types'
 import { omit } from 'lodash'
+import Builder, { Built } from './drawingSystem/Builder'
 
-export default function Asemic(props: ParentProps<{}, {}>) {
+export default function Asemic(
+  props: ParentProps<
+    {
+      src: string | (() => Builder[])
+      process?: (builders: Builder[]) => void
+    },
+    {}
+  >
+) {
   const points = useRef<[number, number][]>([])
+  const builders =
+    typeof props.src === 'string'
+      ? props.src
+          .split('\n')
+          .filter(x => !x.startsWith('//') && x && x.length)
+          .map((value, i) => new Built(new Builder(g => g.parse(value))))
+      : props.src().map(builder => new Built(builder))
+
+  if (props.process) props.process(builders)
   return (
     <>
       <FrameComponent
@@ -38,11 +56,10 @@ export default function Asemic(props: ParentProps<{}, {}>) {
             const text = points.current
               .map(x => `[${x[0].toFixed(2)}, ${x[1].toFixed(2)}]`)
               .join(', ')
-            console.log(point.map(x => x.toFixed(2)))
-
             window.navigator.clipboard.writeText(text)
           }}>
           <color attach='background' args={['#000000']} />
+          {builders.map((b, i) => b.render(`asemic_builder-${i}`, i))}
           {props.children}
         </Canvas>
       </FrameComponent>

@@ -353,11 +353,24 @@ export function FrameComponent<Self, Options>({
     options.setup,
     options.draw
       ? (self, progress, context) => {
-          options.draw!(self, progress, context)
+          options.draw!(
+            self,
+            options.timeOptions?.modifyTime
+              ? options.timeOptions.modifyTime(progress)
+              : progress,
+            context
+          )
         }
       : defaultDraw
       ? (self, progress, context) => {
-          defaultDraw(self, progress, context, options)
+          defaultDraw(
+            self,
+            options.timeOptions?.modifyTime
+              ? options.timeOptions.modifyTime(progress)
+              : progress,
+            context,
+            options
+          )
         }
       : options.draw
       ? options.draw
@@ -365,8 +378,7 @@ export function FrameComponent<Self, Options>({
     options.deps,
     cleanupSelf,
     hide,
-    show,
-    options.startEnd
+    show
   )
 
   return (
@@ -412,18 +424,32 @@ export function ChildComponent<Self, Options, Frame>({
       : undefined,
     options.draw
       ? (self, progress, context) => {
-          options.draw!(self, frame, progress, context)
+          options.draw!(
+            self,
+            frame,
+            options.timeOptions?.modifyTime
+              ? options.timeOptions.modifyTime(progress)
+              : progress,
+            context
+          )
         }
       : defaultDraw
       ? (self, progress, context) => {
-          defaultDraw(self, frame, progress, context, options)
+          defaultDraw(
+            self,
+            frame,
+            options.timeOptions?.modifyTime
+              ? options.timeOptions.modifyTime(progress)
+              : progress,
+            context,
+            options
+          )
         }
       : undefined,
     options.deps,
     cleanupSelf,
     hide,
-    show,
-    options.startEnd
+    show
   )
   return <>{children}</>
 }

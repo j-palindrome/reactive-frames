@@ -1,36 +1,65 @@
-import { cloneDeep } from 'lodash'
-import { Canvas2D, Reactive } from '../../src'
+import { range } from 'lodash'
+import { Reactive } from '../../src'
 import Asemic from '../../src/asemic/Asemic'
-import Brush from '../../src/asemic/Brush'
 import Builder from '../../src/asemic/drawingSystem/Builder'
-import { QuadraticBezierCurve, Vector2 } from 'three'
+import { PointBuilder } from '../../src/asemic/drawingSystem/PointBuilder'
 
 export default function ParticlesTest() {
   // abcdefghijklmnopqrstuvwxyz
   // a poem in space
-  const kf = new Builder(g =>
-    g.text('abcdefghijklmnopqrstuvwxyz', { width: 1, origin: [0, 0.5] })
-  )
-    .to({ translate: [0, -0.5] })
-    .groups((g, p) => {
-      g.transform.rotate += 2 * Math.PI * 1 * (Math.random() - 0.5)
-    })
-    .to({ translate: [0, 0] })
-    .groups(g => (g.transform.rotate = 0))
+  const strokes = `
+wholesome > +0.1,0.5 *0.8 @[0 0.5] *[0.5 2 0.4] > +0,-0.5 *[0.5 2] @[-1 1] >0
+`
 
   return (
-    <Reactive progress={t => (t / 2) % 1}>
-      <Asemic name='a'>
-        <Brush
-          keyframes={kf}
-          name='b'
-          defaults={{
-            a: 1,
-            size: [1, 1]
-          }}
-          loop
-        />
-      </Asemic>
+    <Reactive
+      progress={t => {
+        return (t / 2) % 1
+      }}>
+      <Asemic
+        name='a'
+        src={() => [
+          ...range(1).map(
+            i =>
+              new Builder(
+                g =>
+                  g.eval(g => {
+                    g.newBlankFrame()
+                      .newGroup()
+                      .newShape('circle')
+                      .setWarpGroups([
+                        {
+                          translate: g.getRandomWithin([0.5, 0.5], [0.3, 0.3]),
+                          scale: Math.random() * 0.3
+                        }
+                      ])
+                      .newGroup({ transform: { reset: true } })
+                      .newPoints(
+                        [
+                          g.getRandomAlong([0, 1], [1, 1], [1, 1], [1, 0]),
+                          g.getRandomAlong([0, 1], [0, 0], [0, 0], [1, 0])
+                        ][i % 2]
+                      )
+                      .newPoints(
+                        g.newIntersect(
+                          [
+                            g.getLastPoint(),
+                            g.getLastGroup(-2).transform.translate
+                          ],
+                          { curve: 0, group: 0 }
+                        )
+                      )
+                  }, 5),
+                {
+                  timeOptions: {
+                    modifyTime: t => (t + i / 2) % 1
+                  },
+                  loop: false
+                }
+              )
+          )
+        ]}
+      />
     </Reactive>
   )
 }

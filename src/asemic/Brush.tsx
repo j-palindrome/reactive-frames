@@ -1,6 +1,6 @@
 import { useFrame, useThree } from '@react-three/fiber'
 import { range, sumBy } from 'lodash'
-import { Ref, RefObject, useMemo, useRef } from 'react'
+import { Ref, RefObject, useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { Vector2 } from 'three'
 import {
@@ -13,10 +13,11 @@ import {
 import { rotate2d } from '../../util/src/shaders/manipulation'
 import { hash } from '../../util/src/shaders/utilities'
 import { ChildComponent } from '../blocks/FrameChildComponents'
-import { ChildProps } from '../types'
+import { ChildProps, TimeOptions } from '../types'
 import FeedbackTexture, { FeedbackTextureRef } from './FeedbackTexture'
 import { Mesh } from '../frames/CanvasGL'
 import Builder from './drawingSystem/Builder'
+import { Built } from './drawingSystem/Builder'
 
 const targetVector = new THREE.Vector2()
 
@@ -34,30 +35,28 @@ export type BrushSettings = {
   defaults?: Jitter
   jitter?: Jitter
   flicker?: Jitter
-  position?: VectorList
-  scale?: VectorList
-  rotation?: number
-  fragmentShader?: string
-  vertexShader?: string
-  modifyPosition?: string
-  includes?: string
   loop?: boolean
-  keyframes: Builder
+  recalculate?: false | number
+  modifyColor?: string
+  modifyPosition?: string
+  timeOptions?: TimeOptions
 }
 
-export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
+export default function Brush(
+  props: ChildProps<BrushSettings & { keyframes: Built }, {}, {}>
+) {
   let {
     spacing = 1,
     defaults,
     jitter,
     flicker,
-    fragmentShader = /*glsl*/ `return color;`,
-    vertexShader = /*glsl*/ `return position;`,
-    loop = false,
+    modifyColor = /*glsl*/ `return color;`,
     modifyPosition,
-    includes,
+    loop = false,
+    recalculate = false,
     keyframes
   } = props
+
   defaults = {
     size: [1, 1],
     hsl: [100, 100, 100],
@@ -66,6 +65,7 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
     rotation: 0,
     ...defaults
   }
+
   jitter = {
     size: [0, 0],
     position: [0, 0],
@@ -74,6 +74,7 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
     rotation: 0,
     ...jitter
   }
+
   flicker = {
     size: [0, 0],
     position: [0, 0],
@@ -83,6 +84,10 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
     ...flicker
   }
 
+  const [keyframeData, setKeyframeData] = useState(
+    keyframes.packToTexture(defaults)
+  )
+
   const {
     curveLengths,
     controlPointsCount = 3,
@@ -90,7 +95,7 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
     keyframesTex,
     colorTex,
     thicknessTex
-  } = keyframes.packToTexture(defaults)
+  } = keyframeData
 
   const resolution = useThree(state =>
     state.gl.getDrawingBufferSize(targetVector)
@@ -124,19 +129,39 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
   }, [resolution, curveCount])
 
   const meshRef = useRef<THREE.Group>(null!)
+  const lastProgress = useRef(0)
 
   return (
     <ChildComponent
-      options={{ ...props }}
+      options={{ ...props, ...props.timeOptions }}
       getSelf={() => {
         return meshRef.current
       }}
       defaultDraw={(self, frame, progress, ctx) => {
+        const transforms = keyframes.keyframes.map(x => x.transform)
         const frameTransform = keyframes.getTransformAt(
-          (p, i) => p.keyframes[i].transform,
+          transforms,
           progress,
           loop
         )
+
+        const RESTART = 0.01
+        if (progress >= RESTART && lastProgress.current < RESTART) {
+          keyframes.reInitialize()
+          const data = keyframes.packToTexture(defaults)
+          self.children.forEach(c => {
+            const cMesh = c as THREE.InstancedMesh<
+              THREE.PlaneGeometry,
+              THREE.ShaderMaterial
+            >
+            cMesh.material.uniforms.colorTex.value = data.colorTex
+            cMesh.material.uniforms.thicknessTex.value = data.thicknessTex
+            cMesh.material.uniforms.keyframesTex.value = data.keyframesTex
+            cMesh.material.uniformsNeedUpdate = true
+          })
+        }
+
+        lastProgress.current = progress
 
         self.rotation.set(0, 0, frameTransform.rotate)
         self.scale.set(...frameTransform.scale.toArray(), 1)
@@ -149,8 +174,9 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
           >
           child.material.uniforms.progress.value = progress
           child.material.uniformsNeedUpdate = true
+          const transforms = keyframes.keyframes.map(x => x.groups[i].transform)
           const { translate, scale, rotate } = keyframes.getTransformAt(
-            (p, j) => p.keyframes[j].groups[i].transform,
+            transforms,
             progress,
             loop
           )
@@ -181,14 +207,14 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
             <shaderMaterial
               transparent
               uniforms={{
-                colorTex: { value: colorTex },
-                thicknessTex: { value: thicknessTex },
-                keyframesTex: { value: keyframesTex },
+                resolution: { value: resolution },
                 jitter: { value: jitter },
                 flicker: { value: flicker },
-                resolution: { value: resolution },
                 defaults: { value: defaults },
                 progress: { value: 0 },
+                keyframesTex: { value: keyframesTex },
+                thicknessTex: { value: thicknessTex },
+                colorTex: { value: colorTex },
                 scale: { value: new Vector2(1, 1) }
               }}
               vertexShader={
@@ -349,10 +375,10 @@ in vec4 vColor;
 in float v_test;
 
 vec4 processColor (vec4 color, vec2 uv) {
-  ${fragmentShader}
+  ${modifyColor}
 }
 void main() {
-  gl_FragColor = processColor(vec4(v_test, 1, 1, 1), vUv);
+  gl_FragColor = processColor(vColor, vUv);
 }`
               }
             />
@@ -360,25 +386,5 @@ void main() {
         ))}
       </group>
     </ChildComponent>
-  )
-}
-
-function DisplayTexture({
-  map
-}: {
-  map: RefObject<{ texture: THREE.Texture }>
-}) {
-  const displayRef = useRef<
-    THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>
-  >(null!)
-  useFrame(() => {
-    displayRef.current.material.map = map.current?.texture ?? null
-    displayRef.current.material.needsUpdate = true
-  })
-  return (
-    <mesh ref={displayRef} position={[0.5, 0.5, 0]}>
-      <planeGeometry />
-      <meshBasicMaterial />
-    </mesh>
   )
 }

@@ -99,7 +99,7 @@ export default function App() {
               // fragColor = vec4(1, 1, 1, sin(gl_PointCoord.x * PI * 2.0 * 4.0) * 0.5 + 0.5);
             }`
           }
-          draw={(self, gl, { time, props }) => {
+          draw={(self, gl, progress, { time, props }) => {
             const CYCLE = 2
             if ((time * CYCLE) % 1 < 1 / 20) {
               props.size = Math.random() * 100

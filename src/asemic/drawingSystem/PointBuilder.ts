@@ -11,8 +11,8 @@ export class PointBuilder extends Vector2 {
   parent: Builder
 
   constructor(
-    point: [number, number],
     parent: Builder,
+    point: [number, number] = [0, 0],
     {
       strength = 0,
       color,
@@ -48,6 +48,11 @@ export class PointBuilder extends Vector2 {
   }
 
   override clone() {
-    return new PointBuilder([this.x, this.y], this.parent) as this
+    return new PointBuilder(this.parent, [this.x, this.y], {
+      strength: this.strength,
+      color: this.color,
+      alpha: this.alpha,
+      thickness: this.thickness
+    }) as this
   }
 }

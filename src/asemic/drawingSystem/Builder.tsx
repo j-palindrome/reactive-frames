@@ -13,7 +13,7 @@ import {
   Vector2
 } from 'three'
 import { PointBuilder } from './PointBuilder'
-import { cloneDeep, last, max, min, range, sortBy } from 'lodash'
+import { cloneDeep, last, max, min, now, range, sortBy, sumBy } from 'lodash'
 import { lerp, scale } from '@/util/src/math'
 import { multiBezierProgressJS } from '@/util/src/shaders/bezier'
 import Brush, { BrushSettings, Jitter } from '../Brush'
@@ -44,15 +44,18 @@ type TargetInfo = [number, number] | number
 export default class Builder {
   protected transformData: TransformData = this.toTransform({})
   protected transforms: TransformData[] = []
-  protected defaultKeyframes = [
-    {
-      groups: [{ curves: [[]], transform: this.toTransform({}), settings: {} }],
-      transform: this.toTransform({}),
-      settings: {},
-      frameSettings: { duration: 1, strength: 0 }
-    }
-  ]
-  keyframes: FrameData[] = this.defaultKeyframes
+  protected defaultKeyframe = {
+    groups: [{ curves: [[]], transform: this.toTransform({}), settings: {} }],
+    transform: this.toTransform({}),
+    settings: {},
+    frameSettings: { duration: 1, strength: 0 }
+  }
+
+  // the next ones being built (asynchronously)
+  protected keyframesList: [FrameData[], FrameData[]] = [[], []]
+  protected keyframes = this.keyframesList[0]
+  lastKeyframes = this.keyframesList[1]
+  protected keyframeIndex = 0
   protected targetGroups: [number, number] = [0, 0]
   protected targetFrames: [number, number] = [0, 0]
   protected initialized = false
@@ -629,43 +632,60 @@ ${g.curves
     progress: number,
     loop: boolean = false
   ) {
+    const { t, start } = {
+      start: Math.floor(progress * (this.keyframes.length - 1)),
+      t: (progress * (this.keyframes.length - 1)) % 1
+    }
+
     const curveInterpolate = <T extends Vector2 | number>(
-      groups: T[],
-      t: number,
-      { isStart, isEnd }: { isStart: boolean; isEnd: boolean }
+      groups: T[]
+      // { isStart, isEnd }: { isStart: boolean; isEnd: boolean }
     ) => {
+      // if (groups[0] instanceof Vector2) {
+      //   invariant(groups[1] instanceof Vector2 && groups[2] instanceof Vector2)
+      //   curveCache.v0.copy(groups[0])
+      //   curveCache.v1.copy(groups[1])
+      //   curveCache.v2.copy(groups[2])
+      //   if (!isStart) curveCache.v0.lerp(curveCache.v1, 0.5)
+      //   if (!isEnd) curveCache.v2.lerp(curveCache.v1, 0.5)
+      //   return curveCache.getPoint(t)
+      // } else if (typeof groups[0] === 'number') {
+      //   curveCache.v0.set(0, groups[0])
+      //   curveCache.v1.set(0, groups[1] as number)
+      //   curveCache.v2.set(0, groups[2] as number)
+      //   if (!isStart) curveCache.v0.lerp(curveCache.v1, 0.5)
+      //   if (!isEnd) curveCache.v2.lerp(curveCache.v1, 0.5)
+      //   return curveCache.getPoint(t).y
+      // }
       if (groups[0] instanceof Vector2) {
-        invariant(groups[1] instanceof Vector2 && groups[2] instanceof Vector2)
-        curveCache.v0.copy(groups[0])
-        curveCache.v1.copy(groups[1])
-        curveCache.v2.copy(groups[2])
-        if (!isStart) curveCache.v0.lerp(curveCache.v1, 0.5)
-        if (!isEnd) curveCache.v2.lerp(curveCache.v1, 0.5)
-        return curveCache.getPoint(t)
+        invariant(groups[1] instanceof Vector2)
+        return groups[0].clone().lerp(groups[1], t)
       } else if (typeof groups[0] === 'number') {
-        curveCache.v0.set(0, groups[0])
-        curveCache.v1.set(0, groups[1] as number)
-        curveCache.v2.set(0, groups[2] as number)
-        if (!isStart) curveCache.v0.lerp(curveCache.v1, 0.5)
-        if (!isEnd) curveCache.v2.lerp(curveCache.v1, 0.5)
-        return curveCache.getPoint(t).y
+        invariant(typeof groups[1] === 'number')
+        return lerp(groups[0], groups[1], t)
       }
     }
 
-    const { t, start } = multiBezierProgressJS(
-      progress,
-      loop ? this.keyframes.length + 2 : this.keyframes.length
-    )
+    // const { t, start } = multiBezierProgressJS(
+    //   progress,
+    //   loop ? this.keyframes.length + 2 : this.keyframes.length
+    // )
 
     const makeBezier = <T extends keyof TransformData>(key: T) => {
-      const groups = range(3).map(
+      // const groups = range(3).map(
+      //   i => transforms[(start + i) % transforms.length][key]
+      // )
+
+      // return curveInterpolate(groups, t, {
+      //   isStart: !loop && t === 0,
+      //   isEnd: !loop && t === this.keyframes.length - 3
+      // })
+
+      const groups = range(2).map(
         i => transforms[(start + i) % transforms.length][key]
       )
 
-      return curveInterpolate(groups, t, {
-        isStart: !loop && t === 0,
-        isEnd: !loop && t === this.keyframes.length - 3
-      })
+      return curveInterpolate(groups)
     }
 
     const { rotate, translate, scale } = {
@@ -1072,14 +1092,23 @@ ${g.curves
     )
   }
 
-  getRandomWithin(origin: Coordinate, variation: Coordinate) {
-    return this.toPoint(origin).add(
-      new Vector2()
-        .random()
-        .subScalar(0.5)
-        .multiplyScalar(2)
-        .multiply(this.toPoint(variation))
-    )
+  getRandomWithin(origin: number, variation: number): number
+  getRandomWithin(origin: Coordinate, variation: Coordinate): PointBuilder
+  getRandomWithin(
+    origin: number | Coordinate,
+    variation: number | Coordinate
+  ): number | PointBuilder {
+    if (typeof origin === 'number' && typeof variation === 'number') {
+      return origin + (Math.random() - 0.5) * 2 * variation
+    } else {
+      return this.toPoint(origin as Coordinate).add(
+        new Vector2()
+          .random()
+          .subScalar(0.5)
+          .multiplyScalar(2)
+          .multiply(this.toPoint(variation as Coordinate))
+      )
+    }
   }
 
   newIntersect(
@@ -1135,7 +1164,7 @@ ${g.curves
 
   eval(func: (g: this, progress: number) => void, runCount = 1) {
     for (let i = 0; i < runCount; i++) {
-      func(this, i / runCount)
+      func(this, i)
     }
     return this
   }
@@ -1314,60 +1343,58 @@ ${g.curves
 
 export class Built extends Builder {
   packToTexture(defaults: Jitter) {
+    const keyframes = this.lastKeyframes
     this.reset(true)
-    const keyframeCount = this.keyframes.length
-    const curveCounts = this.keyframes[0].groups.flatMap(x => x.curves).length
+    const keyframeCount = keyframes.length
+    const curveCounts = keyframes[0].groups.flatMap(x => x.curves).length
 
     const controlPointsCount = max(
-      this.keyframes
+      keyframes
         .flatMap(x => x.groups.flatMap(x => x.curves.flatMap(x => x.length)))
         .concat([3])
     )!
 
     const subdivisions = controlPointsCount - 2
-    const curveLengths = range(this.keyframes[0].groups.length).map(i =>
-      range(this.keyframes[0].groups[i].curves.length).map(() => 0)
+    const curveLengths = range(keyframes[0].groups.length).map(i =>
+      range(keyframes[0].groups[i].curves.length).map(() => 0)
     )
 
-    this.eachFrame(
-      keyframe => {
-        keyframe.groups.forEach((group, groupIndex) => {
-          group.curves.forEach((curve, curveIndex) => {
-            // interpolate the bezier curves which are too short
-            if (curve.length < controlPointsCount) {
-              this.interpolateCurve(curve, controlPointsCount)
-            }
+    keyframes.forEach(keyframe => {
+      keyframe.groups.forEach((group, groupIndex) => {
+        group.curves.forEach((curve, curveIndex) => {
+          // interpolate the bezier curves which are too short
+          if (curve.length < controlPointsCount) {
+            this.interpolateCurve(curve, controlPointsCount)
+          }
 
-            // const mappedCurve = curve
-            const mappedCurve = curve.map(x =>
-              x.clone().multiply(group.transform.scale)
+          // const mappedCurve = curve
+          const mappedCurve = curve.map(x =>
+            x.clone().multiply(group.transform.scale)
+          )
+
+          const curvePath = new CurvePath()
+          const segments: Curve<Vector2>[] = []
+          range(subdivisions).forEach(i => {
+            const thisCurve = new QuadraticBezierCurve(
+              i === 0
+                ? mappedCurve[i]
+                : mappedCurve[i].clone().lerp(mappedCurve[i + 1], 0.5),
+              mappedCurve[i + 1],
+              i === subdivisions - 1
+                ? mappedCurve[i + 2]
+                : mappedCurve[i + 1].clone().lerp(mappedCurve[i + 2], 0.5)
             )
-
-            const curvePath = new CurvePath()
-            const segments: Curve<Vector2>[] = []
-            range(subdivisions).forEach(i => {
-              const thisCurve = new QuadraticBezierCurve(
-                i === 0
-                  ? mappedCurve[i]
-                  : mappedCurve[i].clone().lerp(mappedCurve[i + 1], 0.5),
-                mappedCurve[i + 1],
-                i === subdivisions - 1
-                  ? mappedCurve[i + 2]
-                  : mappedCurve[i + 1].clone().lerp(mappedCurve[i + 2], 0.5)
-              )
-              curvePath.add(thisCurve)
-              segments.push(thisCurve)
-            })
-
-            const length = curvePath.getLength()
-            // We sample each curve according to its maximum keyframe length
-            if (length > curveLengths[groupIndex][curveIndex])
-              curveLengths[groupIndex][curveIndex] = length
+            curvePath.add(thisCurve)
+            segments.push(thisCurve)
           })
+
+          const length = curvePath.getLength()
+          // We sample each curve according to its maximum keyframe length
+          if (length > curveLengths[groupIndex][curveIndex])
+            curveLengths[groupIndex][curveIndex] = length
         })
-      },
-      { frames: [0, -1], groups: [0, -1] }
-    )
+      })
+    })
 
     const createTexture = (
       getPoint: (
@@ -1378,7 +1405,7 @@ export class Built extends Builder {
       format: AnyPixelFormat
     ) => {
       const array = new Float32Array(
-        this.keyframes.flatMap(keyframe => {
+        keyframes.flatMap(keyframe => {
           return keyframe.groups.flatMap(group =>
             group.curves.flatMap(curve => {
               return curve.flatMap(point => {
@@ -1388,15 +1415,6 @@ export class Built extends Builder {
           )
         })
       )
-
-      // console.log(
-      //   array.length,
-      //   controlPointsCount,
-      //   curveCounts,
-      //   keyframeCount,
-      //   keyframeCount * curveCounts * controlPointsCount,
-      //   this.keyframes.map(x => x.groups.map(x => x.curves.map(x => x.length)))
-      // )
 
       const tex = new Data3DTexture(
         array,
@@ -1431,20 +1449,47 @@ export class Built extends Builder {
       RedFormat
     )
 
+    const totalDuration = sumBy(keyframes, x => x.frameSettings.duration)
+    let start = 0
+    const keyframeInfo = keyframes.map(({ frameSettings }) => {
+      const duration = frameSettings.duration / totalDuration
+      const oldStart = start
+      start += duration
+      return {
+        duration,
+        start: oldStart,
+        strength: frameSettings.strength
+      }
+    })
+
     return {
       keyframesTex,
       colorTex,
       thicknessTex,
       curveLengths,
       controlPointsCount,
-      keyframeCount
+      keyframeCount,
+      keyframeInfo
     }
   }
 
-  reInitialize() {
-    this.keyframes = cloneDeep(this.defaultKeyframes)
+  async reInitialize() {
+    this.keyframeIndex = this.keyframeIndex ? 0 : 1
+    this.keyframes = this.keyframesList[this.keyframeIndex]
+    this.lastKeyframes = this.keyframesList[this.keyframeIndex ? 0 : 1]
+
+    const lastKeyframe = last(this.lastKeyframes)!
+    this.keyframes.splice(
+      0,
+      this.keyframes.length,
+      cloneDeep(this.defaultKeyframe)
+    )
     this.target({ groups: [0, 0], frames: [0, 0] })
     this.initialize(this)
+    // start from last keyframe
+    if (lastKeyframe.groups[0].curves[0].length > 0) {
+      this.keyframes[0] = lastKeyframe
+    }
   }
 
   protected parseDict: Record<string, ParserData> = {
@@ -1462,6 +1507,14 @@ export class Built extends Builder {
   constructor(b: Builder) {
     // @ts-expect-error
     super(b.initialize, b.settings)
+    this.keyframes.splice(
+      0,
+      this.keyframes.length,
+      cloneDeep(this.defaultKeyframe)
+    )
+
+    this.target({ groups: [0, 0], frames: [0, 0] })
+    this.initialize(this)
     this.reInitialize()
   }
 }

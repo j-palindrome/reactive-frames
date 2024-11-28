@@ -18,47 +18,52 @@ wholesome > +0.1,0.5 *0.8 @[0 0.5] *[0.5 2 0.4] > +0,-0.5 *[0.5 2] @[-1 1] >0
       }}>
       <Asemic
         name='a'
-        src={() => [
-          ...range(1).map(
+        src={() =>
+          range(1).map(
             i =>
               new Builder(
                 g =>
                   g.eval(g => {
-                    g.newBlankFrame()
-                      .newGroup()
-                      .newShape('circle')
-                      .setWarpGroups([
-                        {
-                          translate: g.getRandomWithin([0.5, 0.5], [0.3, 0.3]),
-                          scale: Math.random() * 0.3
-                        }
-                      ])
-                      .newGroup({ transform: { reset: true } })
-                      .newPoints(
-                        [
-                          g.getRandomAlong([0, 1], [1, 1], [1, 1], [1, 0]),
-                          g.getRandomAlong([0, 1], [0, 0], [0, 0], [1, 0])
-                        ][i % 2]
-                      )
-                      .newPoints(
-                        g.newIntersect(
+                    g.newBlankFrame().eval((g, i) => {
+                      g.newGroup()
+                        .newShape('circle')
+                        .setWarpGroups([
+                          {
+                            translate: g.getRandomWithin(
+                              [0.5, 0.5],
+                              [0.3, 0.3]
+                            ),
+                            scale: g.getRandomWithin(0.1, 0.1)
+                          }
+                        ])
+                        .newGroup({ transform: { reset: true } })
+                        .newPoints(
                           [
-                            g.getLastPoint(),
-                            g.getLastGroup(-2).transform.translate
-                          ],
-                          { curve: 0, group: 0 }
+                            g.getRandomAlong([0, 1], [1, 1], [1, 1], [1, 0]),
+                            g.getRandomAlong([0, 1], [0, 0], [0, 0], [1, 0])
+                          ][i % 2]
                         )
-                      )
-                  }, 5),
+                        .newPoints(
+                          g.newIntersect(
+                            [
+                              g.getLastPoint(),
+                              g.getLastGroup(-2).transform.translate
+                            ],
+                            { curve: 0, group: 0 }
+                          )
+                        )
+                    }, 100)
+                  }, 2),
                 {
-                  timeOptions: {
-                    modifyTime: t => (t + i / 2) % 1
-                  },
-                  loop: false
+                  // timeOptions: {
+                  //   modifyTime: t => ((t + i / 3) * (i / 10 + 0.5)) % 1
+                  // },
+                  loop: false,
+                  recalculate: 1
                 }
               )
           )
-        ]}
+        }
       />
     </Reactive>
   )

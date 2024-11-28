@@ -1,5 +1,5 @@
 import { useFrame, useThree } from '@react-three/fiber'
-import { range, sumBy } from 'lodash'
+import { now, range, sumBy } from 'lodash'
 import { Ref, RefObject, useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { Vector2 } from 'three'
@@ -94,7 +94,8 @@ export default function Brush(
     keyframeCount = 1,
     keyframesTex,
     colorTex,
-    thicknessTex
+    thicknessTex,
+    keyframeInfo
   } = keyframeData
 
   const resolution = useThree(state =>
@@ -138,17 +139,21 @@ export default function Brush(
         return meshRef.current
       }}
       defaultDraw={(self, frame, progress, ctx) => {
-        const transforms = keyframes.keyframes.map(x => x.transform)
+        const transforms = keyframes.lastKeyframes.map(x => x.transform)
         const frameTransform = keyframes.getTransformAt(
           transforms,
           progress,
           loop
         )
 
-        const RESTART = 0.01
-        if (progress >= RESTART && lastProgress.current < RESTART) {
+        if (progress < lastProgress.current && recalculate) {
+          let nowTime = now()
           keyframes.reInitialize()
+          console.log('reinit:', now() - nowTime)
+          nowTime = now()
           const data = keyframes.packToTexture(defaults)
+          console.log('time:', now() - nowTime)
+
           self.children.forEach(c => {
             const cMesh = c as THREE.InstancedMesh<
               THREE.PlaneGeometry,
@@ -174,7 +179,9 @@ export default function Brush(
           >
           child.material.uniforms.progress.value = progress
           child.material.uniformsNeedUpdate = true
-          const transforms = keyframes.keyframes.map(x => x.groups[i].transform)
+          const transforms = keyframes.lastKeyframes.map(
+            x => x.groups[i].transform
+          )
           const { translate, scale, rotate } = keyframes.getTransformAt(
             transforms,
             progress,
@@ -215,7 +222,8 @@ export default function Brush(
                 keyframesTex: { value: keyframesTex },
                 thicknessTex: { value: thicknessTex },
                 colorTex: { value: colorTex },
-                scale: { value: new Vector2(1, 1) }
+                scale: { value: new Vector2(1, 1) },
+                keyframeInfo: { value: keyframeInfo }
               }}
               vertexShader={
                 /*glsl*/ `
@@ -230,6 +238,11 @@ struct Jitter {
   float a;
   float rotation;
 };
+struct KeyframeInfo {
+  float duration;
+  float start;
+  float strength;
+};
 
 in vec2 pointInfo;
 
@@ -242,6 +255,7 @@ uniform Jitter flicker;
 uniform Jitter defaults;
 uniform float progress;
 uniform vec2 scale;
+uniform KeyframeInfo keyframeInfo[${keyframeCount}];
 
 out vec2 vUv;
 out vec4 vColor;
@@ -264,55 +278,79 @@ void main() {
   // find progress through keyframes and round to cycles to quadratic bezier based on curve progress
   vec2 pointCurveProgress = 
     multiBezierProgress(pointProgress, int(controlPointsCount));
-  vec2 keyframeCurveProgress = 
-    multiBezierProgress(progress, 
-      loop ? int(keyframesCount) + 2 : int(keyframesCount));
+  // vec2 keyframeCurveProgress = 
+  //   multiBezierProgress(progress, 
+  //     loop ? int(keyframesCount) + 2 : int(keyframesCount));
+  float keyframeStart = floor(progress * (keyframesCount - 1.));
+  float keyframeT = fract(progress * (keyframesCount - 1.));
   
   vec2 points[3];
   float thickness;
   float strength;
   for (float pointI = 0.; pointI < 3.; pointI ++) {
-    vec4 keyframePoints[3];
-    for (int keyframeI = 0; keyframeI < 3; keyframeI ++) {
+    // vec4 keyframePoints[3];
+    // for (int keyframeI = 0; keyframeI < 3; keyframeI ++) {
+    //   float keyframeProgress =
+    //     (keyframeCurveProgress.x + float(keyframeI)) 
+    //     / keyframesCount;
+      
+    //   keyframePoints[keyframeI] = texture(
+    //     keyframesTex,
+    //     vec3(
+    //       (pointCurveProgress.x + pointI) 
+    //         / controlPointsCount,   
+    //       curveProgress, 
+    //       keyframeProgress));
+    // }
+    // if (loop) {
+    //   keyframePoints[0] = 
+    //     mix(keyframePoints[0], keyframePoints[1], 0.5);
+    //   keyframePoints[2] = 
+    //     mix(keyframePoints[1], keyframePoints[2], 0.5);
+    // } else {
+    //   if (keyframeCurveProgress.x != keyframesCount - 3.) {
+    //   keyframePoints[2] = 
+    //     mix(keyframePoints[1], keyframePoints[2], 0.5);
+    //   }
+    //   if (keyframeCurveProgress.x != 0.) {
+    //     keyframePoints[0] = 
+    //       mix(keyframePoints[0], keyframePoints[1], 0.5);
+    //   }
+    // }
+    // points[int(pointI)] = bezier2(
+    //   keyframeCurveProgress.y,
+    //   keyframePoints[0].xy, 
+    //   keyframePoints[1].xy, 
+    //   keyframePoints[2].xy);
+    
+    vec4 keyframePoints[2];
+    for (int keyframeI = 0; keyframeI < 2; keyframeI ++) {
       float keyframeProgress =
-        (keyframeCurveProgress.x + float(keyframeI)) 
+        (keyframeStart + float(keyframeI) + keyframeT) 
         / keyframesCount;
       
       keyframePoints[keyframeI] = texture(
         keyframesTex,
         vec3(
           (pointCurveProgress.x + pointI) 
-            / controlPointsCount,   
+            / controlPointsCount,
           curveProgress, 
           keyframeProgress));
     }
-    if (loop) {
-      keyframePoints[0] = 
-        mix(keyframePoints[0], keyframePoints[1], 0.5);
-      keyframePoints[2] = 
-        mix(keyframePoints[1], keyframePoints[2], 0.5);
-    } else {
-      if (keyframeCurveProgress.x != keyframesCount - 3.) {
-      keyframePoints[2] = 
-        mix(keyframePoints[1], keyframePoints[2], 0.5);
-      }
-      if (keyframeCurveProgress.x != 0.) {
-        keyframePoints[0] = 
-          mix(keyframePoints[0], keyframePoints[1], 0.5);
-      }
-    }
-    points[int(pointI)] = bezier2(
-      keyframeCurveProgress.y,
-      keyframePoints[0].xy, 
-      keyframePoints[1].xy, 
-      keyframePoints[2].xy);
+
+    points[int(pointI)] = mix(
+      keyframePoints[0], 
+      keyframePoints[1], 
+      keyframeT).xy;
+
     if (pointI == 1.) {
       // bezier interpolate the strength of the curve
-      strength = bezier2(
-        keyframeCurveProgress.y,
-        vec2(0, keyframePoints[0].z), 
-        vec2(0.5, keyframePoints[1].z), 
-        vec2(1, keyframePoints[2].z)).y;
+      strength = mix(keyframePoints[0].z, keyframePoints[1].z, keyframeT);
+      // strength = bezier2(
+      //   keyframeCurveProgress.y,
+      //   vec2(0, keyframePoints[0].z), 
+      //   vec2(0.5, keyframePoints[1].z), 
+      //   vec2(1, keyframePoints[2].z)).y;
     }
   }
   // adjust to interpolate between things

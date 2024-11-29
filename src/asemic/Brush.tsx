@@ -92,7 +92,7 @@ export default function Brush(
     colorTex,
     thicknessTex,
     keyframeInfo
-  } = keyframes.packToTexture()
+  } = keyframes.textureData
 
   const resolution = useThree(state =>
     state.gl.getDrawingBufferSize(targetVector)
@@ -135,8 +135,7 @@ export default function Brush(
         return meshRef.current
       }}
       defaultDraw={(self, frame, progress, ctx) => {
-        const data = keyframes.packedData
-        const transforms = data.keyframes.map(x => x.transform)
+        const transforms = keyframes.keyframeData.map(x => x.transform)
         const frameTransform = keyframes.getTransformAt(
           transforms,
           progress,
@@ -144,6 +143,7 @@ export default function Brush(
         )
 
         if (progress < lastProgress.current && recalculate) {
+          const data = keyframes.textureData
           keyframes.reInitialize()
 
           self.children.forEach(c => {
@@ -171,7 +171,9 @@ export default function Brush(
           >
           child.material.uniforms.progress.value = progress
           child.material.uniformsNeedUpdate = true
-          const transforms = data.keyframes.map(x => x.groups[i].transform)
+          const transforms = keyframes.keyframeData.map(
+            x => x.groups[i].transform
+          )
           const { translate, scale, rotate } = keyframes.getTransformAt(
             transforms,
             progress,

@@ -52,10 +52,8 @@ export default class Builder {
   }
 
   // the next ones being built (asynchronously)
-  protected keyframesList: [FrameData[], FrameData[]] = [[], []]
-  protected keyframes = this.keyframesList[0]
-  lastKeyframes = this.keyframesList[1]
-  protected keyframeIndex = 0
+  protected keyframes: FrameData[]
+  protected lastKeyframes: FrameData[]
   protected targetGroups: [number, number] = [0, 0]
   protected targetFrames: [number, number] = [0, 0]
   protected initialized = false
@@ -1338,12 +1336,27 @@ ${g.curves
   ) {
     this.initialize = initialize
     this.settings = settings
+    this.target({ frames: 0, groups: 0 })
+    this.keyframes = [{ ...this.defaultKeyframe }]
+    this.initialize(this)
+    this.lastKeyframes = [...this.keyframes]
   }
 }
 
 export class Built extends Builder {
-  packToTexture(defaults: Jitter) {
-    const keyframes = this.lastKeyframes
+  lastData: ReturnType<typeof this.packToTexture>
+  protected data: ReturnType<typeof this.packToTexture>
+
+  packToTexture() {
+    const defaults: Required<Jitter> = {
+      hsl: [1, 1, 1],
+      a: 1,
+      position: [0, 0],
+      size: [1, 1],
+      rotation: 0
+    }
+
+    const keyframes = this.keyframes
     this.reset(true)
     const keyframeCount = keyframes.length
     const curveCounts = keyframes[0].groups.flatMap(x => x.curves).length
@@ -1469,14 +1482,13 @@ export class Built extends Builder {
       curveLengths,
       controlPointsCount,
       keyframeCount,
-      keyframeInfo
+      keyframeInfo,
+      keyframes
     }
   }
 
-  async reInitialize() {
-    this.keyframeIndex = this.keyframeIndex ? 0 : 1
-    this.keyframes = this.keyframesList[this.keyframeIndex]
-    this.lastKeyframes = this.keyframesList[this.keyframeIndex ? 0 : 1]
+  async init() {
+    await null
 
     const lastKeyframe = last(this.lastKeyframes)!
     this.keyframes.splice(
@@ -1490,6 +1502,16 @@ export class Built extends Builder {
     if (lastKeyframe.groups[0].curves[0].length > 0) {
       this.keyframes[0] = lastKeyframe
     }
+
+    this.data = this.packToTexture()
+  }
+
+  reInitialize() {
+    this.lastData = { ...this.data }
+    this.lastKeyframes = [...this.keyframes]
+    this.keyframes = [cloneDeep(this.defaultKeyframe)]
+
+    this.init()
   }
 
   protected parseDict: Record<string, ParserData> = {
@@ -1507,14 +1529,9 @@ export class Built extends Builder {
   constructor(b: Builder) {
     // @ts-expect-error
     super(b.initialize, b.settings)
-    this.keyframes.splice(
-      0,
-      this.keyframes.length,
-      cloneDeep(this.defaultKeyframe)
-    )
 
-    this.target({ groups: [0, 0], frames: [0, 0] })
-    this.initialize(this)
     this.reInitialize()
+    this.lastData = this.packToTexture()
+    this.data = this.packToTexture()
   }
 }

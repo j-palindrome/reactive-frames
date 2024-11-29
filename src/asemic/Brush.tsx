@@ -84,9 +84,7 @@ export default function Brush(
     ...flicker
   }
 
-  const [keyframeData, setKeyframeData] = useState(
-    keyframes.packToTexture(defaults)
-  )
+  const [keyframeData, setKeyframeData] = useState(keyframes.packToTexture())
 
   const {
     curveLengths,
@@ -139,7 +137,7 @@ export default function Brush(
         return meshRef.current
       }}
       defaultDraw={(self, frame, progress, ctx) => {
-        const transforms = keyframes.lastKeyframes.map(x => x.transform)
+        const transforms = keyframes.lastData.keyframes.map(x => x.transform)
         const frameTransform = keyframes.getTransformAt(
           transforms,
           progress,
@@ -147,21 +145,17 @@ export default function Brush(
         )
 
         if (progress < lastProgress.current && recalculate) {
-          let nowTime = now()
           keyframes.reInitialize()
-          console.log('reinit:', now() - nowTime)
-          nowTime = now()
-          const data = keyframes.packToTexture(defaults)
-          console.log('time:', now() - nowTime)
-
           self.children.forEach(c => {
             const cMesh = c as THREE.InstancedMesh<
               THREE.PlaneGeometry,
               THREE.ShaderMaterial
             >
-            cMesh.material.uniforms.colorTex.value = data.colorTex
-            cMesh.material.uniforms.thicknessTex.value = data.thicknessTex
-            cMesh.material.uniforms.keyframesTex.value = data.keyframesTex
+            cMesh.material.uniforms.colorTex.value = keyframes.lastData.colorTex
+            cMesh.material.uniforms.thicknessTex.value =
+              keyframes.lastData.thicknessTex
+            cMesh.material.uniforms.keyframesTex.value =
+              keyframes.lastData.keyframesTex
             cMesh.material.uniformsNeedUpdate = true
           })
         }
@@ -179,7 +173,7 @@ export default function Brush(
           >
           child.material.uniforms.progress.value = progress
           child.material.uniformsNeedUpdate = true
-          const transforms = keyframes.lastKeyframes.map(
+          const transforms = keyframes.lastData.keyframes.map(
             x => x.groups[i].transform
           )
           const { translate, scale, rotate } = keyframes.getTransformAt(

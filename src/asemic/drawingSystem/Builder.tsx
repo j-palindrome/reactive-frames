@@ -57,7 +57,6 @@ export default class Builder {
     []
   ]
   protected keyframes = this.keyframesList[0]
-  keyframeData = this.keyframesList[1]
   protected keyframeIndex = 0
   protected targetGroups: [number, number] = [0, 0]
   protected targetFrames: [number, number] = [0, 0]
@@ -1352,13 +1351,14 @@ type TextureData = {
   controlPointsCount: number
   keyframeCount: number
   keyframeInfo: { duration: number; start: number; strength: number }[]
+  keyframes: FrameData[]
 }
 
 export class Built extends Builder {
-  texturesList: [TextureData, TextureData]
-  textureData: TextureData
+  packedData: TextureData
 
-  protected packToTexture(keyframes: FrameData[]) {
+  packToTexture() {
+    const keyframes = this.keyframes
     const defaults: Required<Jitter> = {
       a: 1,
       hsl: [1, 1, 1],
@@ -1492,14 +1492,15 @@ export class Built extends Builder {
       curveLengths,
       controlPointsCount,
       keyframeCount,
-      keyframeInfo
+      keyframeInfo,
+      keyframes: this.keyframes
     }
   }
 
   async reinit() {
     await null
 
-    const lastKeyframe = last(this.keyframeData)!
+    const lastKeyframe = last(this.packedData.keyframes)!
     this.keyframes.splice(
       0,
       this.keyframes.length,
@@ -1511,14 +1512,11 @@ export class Built extends Builder {
     if (lastKeyframe.groups[0].curves[0].length > 0) {
       this.keyframes[0] = lastKeyframe
     }
-    // replace the keyframes texture with this
-    this.texturesList[this.keyframeIndex] = this.packToTexture(this.keyframes)
+    this.packedData = this.packToTexture()
   }
 
   reInitialize() {
     // switch the output to the last keyframe index
-    this.keyframeData = this.keyframesList[this.keyframeIndex]
-    this.textureData = this.texturesList[this.keyframeIndex]
     this.keyframeIndex = this.keyframeIndex ? 0 : 1
     this.keyframes = this.keyframesList[this.keyframeIndex]
 
@@ -1542,9 +1540,7 @@ export class Built extends Builder {
     super(b.initialize, b.settings)
 
     this.initialize(this)
-    const textureData = this.packToTexture(this.keyframes)
-    this.texturesList = [textureData, textureData]
-    this.textureData = textureData
+    this.packedData = this.packToTexture()
 
     this.reInitialize()
   }

@@ -44,12 +44,6 @@ type TargetInfo = [number, number] | number
 export default class Builder {
   protected transformData: TransformData = this.toTransform({})
   protected transforms: TransformData[] = []
-  protected defaultKeyframe = {
-    groups: [{ curves: [[]], transform: this.toTransform({}), settings: {} }],
-    transform: this.toTransform({}),
-    settings: {},
-    frameSettings: { duration: 1, strength: 0 }
-  }
 
   // the next ones being built (asynchronously)
   protected keyframes: FrameData[]
@@ -62,6 +56,15 @@ export default class Builder {
   protected reset(clear = false) {
     this.transformData = this.toTransform({})
     if (clear) this.transforms = []
+  }
+
+  protected defaultKeyframe() {
+    return {
+      groups: [{ curves: [[]], transform: this.toTransform({}), settings: {} }],
+      transform: this.toTransform({}),
+      settings: {},
+      frameSettings: { duration: 1, strength: 0 }
+    }
   }
 
   protected target(target: TargetGroups = {}) {
@@ -219,7 +222,7 @@ export default class Builder {
     }
   }
 
-  protected combineTransforms(
+  combineTransforms(
     transformData: TransformData,
     nextTransformData: TransformData
   ) {
@@ -837,6 +840,11 @@ ${g.curves
     return this
   }
 
+  setTransformAt(transform: PreTransformData, target: TransformData) {
+    this.combineTransforms(target, this.toTransform(transform))
+    return this
+  }
+
   protected letters: Record<string, () => Builder> = {
     ' ': () => this.setTransform({ translate: [0.5, 0], push: true }),
     '\t': () => this.setTransform({ translate: [2, 0], push: true }),
@@ -1339,7 +1347,7 @@ ${g.curves
     this.initialize = initialize
     this.settings = settings
     this.target({ frames: 0, groups: 0 })
-    this.keyframes = [{ ...this.defaultKeyframe }]
+    this.keyframes = [this.defaultKeyframe()]
     this.initialize(this)
   }
 }
@@ -1499,7 +1507,7 @@ export class Built extends Builder {
 
   reInitialize() {
     // supposed to use these keyframes
-    this.keyframes = [{ ...this.defaultKeyframe }]
+    this.keyframes.splice(0, this.keyframes.length, this.defaultKeyframe())
     this.init()
   }
 

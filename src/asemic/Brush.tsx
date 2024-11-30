@@ -137,7 +137,7 @@ export default function Brush(
         return meshRef.current
       }}
       defaultDraw={(self, frame, progress, ctx) => {
-        const transforms = keyframes.lastData.keyframes.map(x => x.transform)
+        const transforms = keyframes.data.keyframes.map(x => x.transform)
         const frameTransform = keyframes.getTransformAt(
           transforms,
           progress,
@@ -151,11 +151,11 @@ export default function Brush(
               THREE.PlaneGeometry,
               THREE.ShaderMaterial
             >
-            cMesh.material.uniforms.colorTex.value = keyframes.lastData.colorTex
+            cMesh.material.uniforms.colorTex.value = keyframes.data.colorTex
             cMesh.material.uniforms.thicknessTex.value =
-              keyframes.lastData.thicknessTex
+              keyframes.data.thicknessTex
             cMesh.material.uniforms.keyframesTex.value =
-              keyframes.lastData.keyframesTex
+              keyframes.data.keyframesTex
             cMesh.material.uniformsNeedUpdate = true
           })
         }
@@ -173,7 +173,7 @@ export default function Brush(
           >
           child.material.uniforms.progress.value = progress
           child.material.uniformsNeedUpdate = true
-          const transforms = keyframes.lastData.keyframes.map(
+          const transforms = keyframes.data.keyframes.map(
             x => x.groups[i].transform
           )
           const { translate, scale, rotate } = keyframes.getTransformAt(

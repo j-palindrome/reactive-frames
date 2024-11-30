@@ -53,7 +53,6 @@ export default class Builder {
 
   // the next ones being built (asynchronously)
   protected keyframes: FrameData[]
-  protected lastKeyframes: FrameData[]
   protected targetGroups: [number, number] = [0, 0]
   protected targetFrames: [number, number] = [0, 0]
   protected initialized = false
@@ -95,6 +94,9 @@ export default class Builder {
   getLastGroup(group: number = -1, frame: number = -1) {
     if (frame < 0) frame += this.keyframes.length
     if (group < 0) group += this.keyframes[frame].groups.length
+
+    // console.log('last group', last(this.keyframes)!.groups.length)
+
     return this.keyframes[frame].groups[group]
   }
 
@@ -1164,11 +1166,12 @@ ${g.curves
     for (let i = 0; i < runCount; i++) {
       func(this, i)
     }
+
     return this
   }
 
   parse(value: string) {
-    type FunctionCall = { name: string; args: any[]; argString: string }
+    // type FunctionCall = { name: string; args: any[]; argString: string }
 
     let parsed = value
     const matchString = (match: RegExp, string: string) => {
@@ -1262,7 +1265,6 @@ ${g.curves
     this.newText(text)
 
     this.newFrame(-1)
-    console.log(parsed)
 
     const translate = parseCoordinate(
       matchString(/ \+([\-\d\.,\/~]+)/, parsed)
@@ -1339,13 +1341,11 @@ ${g.curves
     this.target({ frames: 0, groups: 0 })
     this.keyframes = [{ ...this.defaultKeyframe }]
     this.initialize(this)
-    this.lastKeyframes = [...this.keyframes]
   }
 }
 
 export class Built extends Builder {
-  lastData: ReturnType<typeof this.packToTexture>
-  protected data: ReturnType<typeof this.packToTexture>
+  data: ReturnType<typeof this.packToTexture>
 
   packToTexture() {
     const defaults: Required<Jitter> = {
@@ -1451,7 +1451,6 @@ export class Built extends Builder {
       point => [...(point.color ?? defaults.hsl!), point.alpha ?? defaults.a!],
       RGBAFormat
     )
-
     const thicknessTex = createTexture(
       (point, group, frame) => [
         point.thickness ??
@@ -1483,34 +1482,24 @@ export class Built extends Builder {
       controlPointsCount,
       keyframeCount,
       keyframeInfo,
-      keyframes
+      keyframes: [...keyframes]
     }
   }
 
   async init() {
-    await null
-
-    const lastKeyframe = last(this.lastKeyframes)!
-    this.keyframes.splice(
-      0,
-      this.keyframes.length,
-      cloneDeep(this.defaultKeyframe)
-    )
+    const lastKeyframe = last(this.data.keyframes)!
     this.target({ groups: [0, 0], frames: [0, 0] })
     this.initialize(this)
     // start from last keyframe
     if (lastKeyframe.groups[0].curves[0].length > 0) {
       this.keyframes[0] = lastKeyframe
     }
-
     this.data = this.packToTexture()
   }
 
   reInitialize() {
-    this.lastData = { ...this.data }
-    this.lastKeyframes = [...this.keyframes]
-    this.keyframes = [cloneDeep(this.defaultKeyframe)]
-
+    // supposed to use these keyframes
+    this.keyframes = [{ ...this.defaultKeyframe }]
     this.init()
   }
 
@@ -1530,8 +1519,8 @@ export class Built extends Builder {
     // @ts-expect-error
     super(b.initialize, b.settings)
 
-    this.reInitialize()
-    this.lastData = this.packToTexture()
+    this.initialize(this)
     this.data = this.packToTexture()
+    this.reInitialize()
   }
 }

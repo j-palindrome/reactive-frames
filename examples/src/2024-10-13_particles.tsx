@@ -24,7 +24,7 @@ wholesome > +0.1,0.5 *0.8 @[0 0.5] *[0.5 2 0.4] > +0,-0.5 *[0.5 2] @[-1 1] >0
               new Builder(
                 g =>
                   g.eval(g => {
-                    g.newBlankFrame().eval((g, i) => {
+                    g.newBlankFrame().eval(g => {
                       g.newGroup()
                         .newShape('circle')
                         .setWarpGroups([
@@ -37,23 +37,19 @@ wholesome > +0.1,0.5 *0.8 @[0 0.5] *[0.5 2 0.4] > +0,-0.5 *[0.5 2] @[-1 1] >0
                           }
                         ])
                         .newGroup({ transform: { reset: true } })
-                        .newPoints(
-                          [
-                            g.getRandomAlong([0, 1], [1, 1], [1, 1], [1, 0]),
-                            g.getRandomAlong([0, 1], [0, 0], [0, 0], [1, 0])
-                          ][i % 2]
-                        )
+                        .newPoints(g.getRandomAlong([0, 0], [1, 0]))
                         .newPoints(
                           g.newIntersect(
                             [
                               g.getLastPoint(),
                               g.getLastGroup(-2).transform.translate
                             ],
-                            { curve: 0, group: 0 }
+                            { curve: 0, group: -2 }
                           )
                         )
-                    }, 1)
+                    }, 100)
                   }, 2),
+
                 {
                   // timeOptions: {
                   //   modifyTime: t => ((t + i / 3) * (i / 10 + 0.5)) % 1

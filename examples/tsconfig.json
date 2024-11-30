@@ -25,7 +25,7 @@
     "composite": true
   },
 
-  "include": ["src", "util", "main.tsx", "../src/**/*"],
+  "include": ["src", "../util/**/*", "main.tsx", "../src/**/*"],
   "references": [
     { "path": "./tsconfig.node.json" },
     { "path": "../tsconfig.json" }

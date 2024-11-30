@@ -89,11 +89,9 @@ export default function Brush(
   const {
     curveLengths,
     controlPointsCount = 3,
-    keyframeCount = 1,
     keyframesTex,
     colorTex,
-    thicknessTex,
-    keyframeInfo
+    thicknessTex
   } = keyframeData
 
   const resolution = useThree(state =>
@@ -137,12 +135,7 @@ export default function Brush(
         return meshRef.current
       }}
       defaultDraw={(self, frame, progress, ctx) => {
-        const transforms = keyframes.data.keyframes.map(x => x.transform)
-        const frameTransform = keyframes.getTransformAt(
-          transforms,
-          progress,
-          loop
-        )
+        const frameTransform = keyframes.data.keyframe.transform
 
         if (progress < lastProgress.current && recalculate) {
           keyframes.reInitialize()
@@ -173,14 +166,8 @@ export default function Brush(
           >
           child.material.uniforms.progress.value = progress
           child.material.uniformsNeedUpdate = true
-          const transforms = keyframes.data.keyframes.map(
-            x => x.groups[i].transform
-          )
-          const { translate, scale, rotate } = keyframes.getTransformAt(
-            transforms,
-            progress,
-            loop
-          )
+          const transform = keyframes.data.keyframe.groups[i].transform
+          const { translate, scale, rotate } = transform
           const scaleUniform: Vector2 = child.material.uniforms.scale.value
           scaleUniform.set(1, 1).multiply(self.scale).multiply(scale)
           child.position.set(translate.x, translate.y, 0)
@@ -216,12 +203,10 @@ export default function Brush(
                 keyframesTex: { value: keyframesTex },
                 thicknessTex: { value: thicknessTex },
                 colorTex: { value: colorTex },
-                scale: { value: new Vector2(1, 1) },
-                keyframeInfo: { value: keyframeInfo }
+                scale: { value: new Vector2(1, 1) }
               }}
               vertexShader={
                 /*glsl*/ `
-#define keyframesCount ${keyframeCount}.
 #define controlPointsCount ${controlPointsCount}.
 
 const bool loop = ${loop ? 'true' : 'false'};
@@ -249,7 +234,6 @@ uniform Jitter flicker;
 uniform Jitter defaults;
 uniform float progress;
 uniform vec2 scale;
-uniform KeyframeInfo keyframeInfo[${keyframeCount}];
 
 out vec2 vUv;
 out vec4 vColor;

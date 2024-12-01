@@ -50,10 +50,7 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
     jitter,
     flicker,
     fragmentShader = /*glsl*/ `return color;`,
-    vertexShader = /*glsl*/ `return position;`,
-    loop = false,
     modifyPosition,
-    includes,
     keyframes
   } = props
   defaults = {

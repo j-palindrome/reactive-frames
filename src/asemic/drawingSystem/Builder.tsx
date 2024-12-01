@@ -14,7 +14,17 @@ import {
   Vector2
 } from 'three'
 import { PointBuilder } from './PointBuilder'
-import { cloneDeep, last, max, min, now, range, sortBy, sumBy } from 'lodash'
+import {
+  cloneDeep,
+  last,
+  max,
+  min,
+  now,
+  range,
+  sortBy,
+  sum,
+  sumBy
+} from 'lodash'
 import { lerp, scale } from '@/util/src/math'
 import { multiBezierProgressJS } from '@/util/src/shaders/bezier'
 import Brush, { BrushSettings, Jitter } from '../Brush'
@@ -1221,73 +1231,24 @@ export class Built extends Builder {
     }
 
     this.reset(true)
-    const curveCounts = this.keyframe.groups.flatMap(x => x.curves).length
-
-    const controlPointsCount = max(
-      this.keyframe.groups
-        .flatMap(x => x.curves.flatMap(x => x.length))
-        .concat([3])
-    )!
-
-    const subdivisions = controlPointsCount - 2
-    const curveLengths = range(this.keyframe.groups.length).map(i =>
-      range(this.keyframe.groups[i].curves.length).map(() => 0)
-    )
+    const controlPointCounts: number[] = []
+    const groups: { transform: TransformData }[] = []
 
     this.keyframe.groups.forEach((group, groupIndex) => {
+      groups.push({ transform: this.keyframe.groups[groupIndex].transform })
       group.curves.forEach((curve, curveIndex) => {
-        // interpolate the bezier curves which are too short
-        if (curve.length < controlPointsCount) {
-          this.interpolateCurve(curve, controlPointsCount)
-        }
-
-        // const mappedCurve = curve
-        const mappedCurve = curve.map(x =>
-          x.clone().multiply(group.transform.scale)
-        )
-
-        const curvePath = new CurvePath()
-        const segments: Curve<Vector2>[] = []
-        range(subdivisions).forEach(i => {
-          const thisCurve = new QuadraticBezierCurve(
-            i === 0
-              ? mappedCurve[i]
-              : mappedCurve[i].clone().lerp(mappedCurve[i + 1], 0.5),
-            mappedCurve[i + 1],
-            i === subdivisions - 1
-              ? mappedCurve[i + 2]
-              : mappedCurve[i + 1].clone().lerp(mappedCurve[i + 2], 0.5)
-          )
-          curvePath.add(thisCurve)
-          segments.push(thisCurve)
-        })
-
-        const length = curvePath.getLength()
-        // We sample each curve according to its maximum keyframe length
-        if (length > curveLengths[groupIndex][curveIndex])
-          curveLengths[groupIndex][curveIndex] = length
+        controlPointCounts.push(curve.length)
       })
     })
 
-    const createTexture = (
-      getPoint: (
-        point: PointBuilder,
-        group: GroupData,
-        frame: FrameData
-      ) => number[],
-      format: AnyPixelFormat
-    ) => {
-      const array = new Float32Array(
-        this.keyframe.groups.flatMap(group =>
-          group.curves.flatMap(curve => {
-            return curve.flatMap(point => {
-              return getPoint(point, group, this.keyframe)
-            })
-          })
-        )
-      )
+    const maxControlPoints = max(controlPointCounts)!
 
-      const tex = new DataTexture(array, controlPointsCount, curveCounts)
+    const createTexture = (array: Float32Array, format: AnyPixelFormat) => {
+      const tex = new DataTexture(
+        array,
+        maxControlPoints,
+        controlPointCounts.length
+      )
       tex.format = format
       tex.type = FloatType
       tex.minFilter = tex.magFilter = NearestFilter
@@ -1296,21 +1257,56 @@ export class Built extends Builder {
       return tex
     }
 
-    const keyframesTex = createTexture(point => {
-      return [...point.toArray(), point.strength, 1]
-    }, RGBAFormat)
+    const keyframesTex = createTexture(
+      new Float32Array(
+        this.keyframe.groups.flatMap(x =>
+          x.curves.flatMap(c =>
+            range(maxControlPoints).flatMap(i => {
+              return c[i] ? [c[i].x, c[i].y, c[i].strength, 1] : [0, 0, 0, 0]
+            })
+          )
+        )
+      ),
+      RGBAFormat
+    )
 
     const colorTex = createTexture(
-      point => [...(point.color ?? defaults.hsl!), point.alpha ?? defaults.a!],
+      new Float32Array(
+        this.keyframe.groups.flatMap(group =>
+          group.curves.flatMap(x =>
+            x.flatMap(point =>
+              point
+                ? [
+                    ...(point.color ??
+                      group.settings.color ??
+                      this.keyframe.settings.color ??
+                      defaults.hsl),
+                    point.alpha ?? defaults.a!
+                  ]
+                : [0, 0, 0, 0]
+            )
+          )
+        )
+      ),
       RGBAFormat
     )
     const thicknessTex = createTexture(
-      (point, group, frame) => [
-        point.thickness ??
-          group.settings.thickness ??
-          frame.settings.thickness ??
-          1
-      ],
+      new Float32Array(
+        this.keyframe.groups.flatMap(group =>
+          group.curves.flatMap(x =>
+            x.flatMap(point =>
+              point
+                ? [
+                    point.thickness ??
+                      group.settings.thickness ??
+                      this.keyframe.settings.thickness ??
+                      1
+                  ]
+                : [0, 0, 0, 0]
+            )
+          )
+        )
+      ),
       RedFormat
     )
 
@@ -1318,11 +1314,38 @@ export class Built extends Builder {
       keyframesTex,
       colorTex,
       thicknessTex,
-      curveLengths,
-      controlPointsCount,
+      controlPointCounts,
       transform: this.keyframe.transform,
-      groups: this.keyframe.groups.map(x => ({ transform: x.transform }))
+      groups
     }
+  }
+
+  packToAttributes(resolution: [number, number]) {
+    let curveIndex = 0
+    const curveLengths = this.keyframe.groups.map(x =>
+      x.curves.map(x => this.makeCurvePath(x).getLength())
+    )
+    const totalCurves = sum(this.keyframe.groups.map(x => x.curves.length))
+    const pointProgress = curveLengths.map(group => {
+      const thisPointProgress = Float32Array.from(
+        group.flatMap(curveLength => {
+          const pointsInCurve =
+            (curveLength * resolution[0]) /
+            (this.settings.spacing ??
+              1 * (this.settings.defaults?.size?.[0] ?? 1))
+          const r = range(pointsInCurve).flatMap(vertexI => {
+            const pointProg = vertexI / (pointsInCurve - 1)
+            const curveProg = curveIndex / Math.max(1, totalCurves)
+            // sample from middle of pixels
+            return [pointProg, curveProg]
+          })
+          curveIndex++
+          return r
+        })
+      )
+      return thisPointProgress
+    })
+    return { pointProgress }
   }
 
   async init() {

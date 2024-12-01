@@ -121,7 +121,7 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
             scale={[...group.transform.scale.toArray(), 1]}
             rotation={[0, 0, group.transform.rotate]}
             key={i + now()}
-            args={[undefined, undefined, group.totalCurveLength]}>
+            args={[undefined, undefined, 1]}>
             <planeGeometry args={[defaults.size![0], defaults.size![1]]} />
             <shaderMaterial
               transparent
@@ -136,9 +136,8 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
                 progress: { value: 0 },
                 scale: { value: new Vector2(1, 1) },
                 dimensions: { value: dimensions },
-                curveLengths: { value: group.curveLengths },
-                curveIndexes: { value: group.curveIndexes },
-                controlPointCounts: { value: group.controlPointCounts }
+                curvesTex: { value: group.curvesTex },
+                curvesTexLength: { value: group.curvesTexLength }
               }}
               vertexShader={
                 /*glsl*/ `
@@ -165,9 +164,8 @@ uniform Jitter defaults;
 uniform float progress;
 uniform vec2 scale;
 uniform vec2 dimensions;
-uniform int controlPointCounts[${group.controlPointCounts.length}];
-uniform int curveLengths[${group.curveLengths.length}];
-uniform int curveIndexes[${group.curveIndexes.length}];
+uniform sampler2D curvesTex;
+uniform float curvesTexLength;
 
 out vec2 vUv;
 out vec4 vColor;
@@ -185,21 +183,28 @@ void main() {
   vec2 aspectRatio = vec2(1, resolution.y / resolution.x);
   vec2 pixel = vec2(1. / resolution.x, 1. / resolution.y);
 
-  int id = gl_InstanceID;
-  int totalLength = curveLengths[0];
-  int lastLength = 0;
-  int curveIndex = 0;
+  float id = 100.;
+  vec4 curvesTexSample = texture(curvesTex, vec2(0, 0));
+  float totalLength = curvesTexSample.x;
+  float lastLength = 0.;
+  float curveIndex = 0.;
   while (id > totalLength) {
+    if (totalLength < 1.) {
+      v_test = 1.;
+      break;
+    };
     curveIndex++;
     lastLength = totalLength;
-    totalLength += curveLengths[curveIndex];
+    curvesTexSample = texture(curvesTex, 
+      vec2(curveIndex / curvesTexLength, 0));
+    totalLength += curvesTexSample.x;
   }
-  float pointProgress = float(id - lastLength) / float(curveLengths[curveIndex]);
-  float curveProgress = float(curveIndexes[curveIndex]) / dimensions.y;
-  int controlPointsCount = controlPointCounts[curveIndex];
+  float pointProgress = float(id - lastLength) / curvesTexSample.x;
+  float controlPointsCount = curvesTexSample.y;
+  float curveProgress = curvesTexSample.z / dimensions.y;
   
   vec2 pointCurveProgress = 
-    multiBezierProgress(pointProgress, controlPointsCount);
+    multiBezierProgress(pointProgress, int(controlPointsCount));
   vec2 points[3];
   float strength;
 
@@ -265,6 +270,8 @@ void main() {
         point.rotation + 1.5707 + jitterRotation) 
         / aspectRatio / scale),
       0, 1);
+
+    gl_Position = vec4(position.xy, 0, 1);
 }
 `
               }
@@ -279,8 +286,8 @@ vec4 processColor (vec4 color, vec2 uv) {
   ${fragmentShader}
 }
 void main() {
-  gl_FragColor = processColor(vColor, vUv);
-  // gl_FragColor = processColor(vec4(v_test, 1,1,1), vUv);
+  // gl_FragColor = processColor(vColor, vUv);
+  gl_FragColor = processColor(vec4(v_test, 1,1,1), vUv);
 }`
               }
             />

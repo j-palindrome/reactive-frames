@@ -9,7 +9,7 @@ export default function ParticlesTest() {
   // abcdefghijklmnopqrstuvwxyz
   // a poem in space
   const kf = new Builder(
-    g => g.text('abcdefghijklmnop', { width: 1, origin: [0, 0.5] })
+    g => g.text('wxyz', { width: 1, origin: [0, 0.5] })
     // .newGroup({ scale: g.getRandomAlong([0, 0], [1, 1]) })
     // .newCurve([0, 0], [1, 1])
   )

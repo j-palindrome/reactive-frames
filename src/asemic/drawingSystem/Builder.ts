@@ -803,6 +803,10 @@ ${g.curves
     return this
   }
 
+  newPoints(...points: Coordinate[]) {
+    return this.lastCurve(c => c.push(...this.toPoints(...points)))
+  }
+
   length(copyCount: number) {
     return this.lastCurve(curve =>
       curve.push(...range(copyCount).map(() => curve[0].clone()))
@@ -1062,13 +1066,15 @@ ${g.curves
         ],
         [0, 1, { scale: [0.4, -0.4] }],
         [1, 1],
-        [0, 0, { reset: 'pop', translate: [0.4, 0], scale: [0.6, 0.6] }],
-        [0, 1],
-        [1, 1],
         [1, 0]
       )
+        .newPoints(
+          [0, 1, { reset: 'last', scale: [0.6, 0.6], translate: [0, -0.2] }],
+          [1, 1],
+          [1, 0]
+        )
         // .within([0, 0, { reset: 'last' }], [0.5, 1])
-        .transform({ translate: [0.6, 0], reset: 'last' }),
+        .transform({ translate: [0.6, 0], reset: true }),
     t: () =>
       this.newCurve([0, 0], [0, 1])
         .newCurve([0, 0, { translate: [0, 0.65], scale: [0.4, 1] }], [1, 0])
@@ -1091,7 +1097,7 @@ ${g.curves
       this.newCurve(
         [0, 0, { translate: [0, 0.5], scale: [0.4, 0.7] }],
         [0.5, -1, { strength: 1 }],
-        [0, 0, { translate: [1, 0], strength: 1 }],
+        [0, 0, { translate: [0.5, 0], strength: 1 }],
         [0.5, -1, { strength: 1 }],
         [1, 0]
       ).transform({ translate: [0.8, 0], reset: 'last' }),

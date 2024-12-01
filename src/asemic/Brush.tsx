@@ -74,25 +74,17 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
     ...flicker
   }
 
+  const resolution = useThree(state =>
+    state.gl.getDrawingBufferSize(targetVector)
+  )
   const {
     controlPointCounts,
     keyframesTex,
     colorTex,
     thicknessTex,
-    maxControlPoints
-  } = keyframes.packToTexture()
-
-  const resolution = useThree(state =>
-    state.gl.getDrawingBufferSize(targetVector)
-  )
-
-  const { pointProgress } = useMemo(() => {
-    return keyframes.packToAttributes(
-      [window.innerWidth, window.innerHeight],
-      props.spacing,
-      props.defaults?.size
-    )
-  }, [resolution, controlPointCounts.length])
+    maxControlPoints,
+    groups
+  } = keyframes.packToTexture(resolution)
 
   const meshRef = useRef<THREE.Group>(null!)
   const lastProgress = useRef(0)
@@ -106,8 +98,6 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
       defaultDraw={(self, frame, progress, ctx) => {
         if (typeof recalculate === 'function') progress = recalculate(progress)
         if (progress < lastProgress.current && recalculate) {
-          console.log('recalculating')
-
           keyframes.reInitialize()
           const frameTransform = keyframes.keyframes[0].transform
 
@@ -115,7 +105,7 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
           self.scale.set(...frameTransform.scale.toArray(), 1)
           self.position.set(...frameTransform.translate.toArray(), 0)
 
-          const newTextures = keyframes.packToTexture()
+          const newTextures = keyframes.packToTexture(resolution)
           self.children.forEach((c, i) => {
             const child = c as THREE.InstancedMesh<
               THREE.PlaneGeometry,
@@ -147,14 +137,14 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
         self.visible = false
       }}>
       <group ref={meshRef}>
-        {range(pointProgress.length).map(i => (
+        {groups.map((group, i) => (
           <instancedMesh
             key={i}
-            args={[undefined, undefined, pointProgress[i].length / 2]}>
+            args={[undefined, undefined, group.pointProgress.length / 2]}>
             <planeGeometry args={[defaults.size![0], defaults.size![1]]}>
               <instancedBufferAttribute
                 attach='attributes-pointInfo'
-                args={[pointProgress[i], 2]}
+                args={[group.pointProgress, 2]}
               />
             </planeGeometry>
             <shaderMaterial

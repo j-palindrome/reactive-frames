@@ -21,17 +21,11 @@ wholesome > +0.1,0.5 *0.8 @[0 0.5] *[0.5 2 0.4] > +0,-0.5 *[0.5 2] @[-1 1] >0
         src={() =>
           range(1).map(
             i =>
-              new Builder(
-                p =>
-                  p
-                    .newGroup({
-                      transform: {
-                        scale: [Math.random(), 1],
-                        translate: [Math.random(), 0]
-                      }
-                    })
-                    .newPoints([0, 0], [1, 1]),
-                { recalculate: true }
+              new Builder(p =>
+                p
+                  .newText('yippee')
+                  // .setWarpGroups([{ scale: 0.5 }], { groups: [0, -1] })
+                  .debug()
               )
           )
         }

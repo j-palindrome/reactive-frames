@@ -4,8 +4,6 @@ import { Ref, RefObject, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { Vector2 } from 'three'
 import {
-  bezier2,
-  bezier3,
   bezierPoint,
   multiBezierProgress,
   multiBezierProgressJS
@@ -83,45 +81,20 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
     ...flicker
   }
 
-  const {
-    curveLengths,
-    controlPointsCount = 3,
-    keyframeCount = 1,
-    keyframesTex,
-    colorTex,
-    thicknessTex
-  } = keyframes.packToTexture(defaults)
+  const { controlPointCounts, keyframesTex, colorTex, thicknessTex } =
+    keyframes.packToTexture()
 
   const resolution = useThree(state =>
     state.gl.getDrawingBufferSize(targetVector)
   )
 
-  const curveCount = curveLengths.flat().length
-
   const { pointProgress } = useMemo(() => {
-    let curveIndex = 0
-    const pointProgress = curveLengths.map(group => {
-      const thisPointProgress = Float32Array.from(
-        group.flatMap(curveLength => {
-          const pointsInCurve =
-            (curveLength * resolution.x) / (spacing * defaults.size![0])
-          const r = range(pointsInCurve).flatMap(vertexI => {
-            const pointProg = vertexI / (pointsInCurve - 1)
-            const curveProg = curveIndex / Math.max(1, curveCount - 1)
-            // sample from middle of pixels
-            return [
-              pointProg,
-              curveProg * (1 - 1 / curveCount) + 0.5 / curveCount
-            ]
-          })
-          curveIndex++
-          return r
-        })
-      )
-      return thisPointProgress
-    })
-    return { pointProgress }
-  }, [resolution, curveCount])
+    return keyframes.packToAttributes(
+      [window.innerWidth, window.innerHeight],
+      props.spacing,
+      props.defaults?.size
+    )
+  }, [resolution, controlPointCounts.length])
 
   const meshRef = useRef<THREE.Group>(null!)
 
@@ -132,11 +105,7 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
         return meshRef.current
       }}
       defaultDraw={(self, frame, progress, ctx) => {
-        const frameTransform = keyframes.getTransformAt(
-          (p, i) => p.keyframes[i].transform,
-          progress,
-          loop
-        )
+        const frameTransform = keyframes.keyframes[0].transform
 
         self.rotation.set(0, 0, frameTransform.rotate)
         self.scale.set(...frameTransform.scale.toArray(), 1)
@@ -149,11 +118,8 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
           >
           child.material.uniforms.progress.value = progress
           child.material.uniformsNeedUpdate = true
-          const { translate, scale, rotate } = keyframes.getTransformAt(
-            (p, j) => p.keyframes[j].groups[i].transform,
-            progress,
-            loop
-          )
+          const { translate, scale, rotate } =
+            keyframes.keyframes[0].groups[i].transform
           const scaleUniform: Vector2 = child.material.uniforms.scale.value
           scaleUniform.set(1, 1).multiply(self.scale).multiply(scale)
           child.position.set(translate.x, translate.y, 0)
@@ -189,14 +155,11 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
                 resolution: { value: resolution },
                 defaults: { value: defaults },
                 progress: { value: 0 },
-                scale: { value: new Vector2(1, 1) }
+                scale: { value: new Vector2(1, 1) },
+                controlPointCounts: { value: controlPointCounts }
               }}
               vertexShader={
                 /*glsl*/ `
-#define keyframesCount ${keyframeCount}.
-#define controlPointsCount ${controlPointsCount}.
-
-const bool loop = ${loop ? 'true' : 'false'};
 struct Jitter {
   vec2 size;
   vec2 position;
@@ -204,23 +167,28 @@ struct Jitter {
   float a;
   float rotation;
 };
+struct KeyframeInfo {
+  float duration;
+  float start;
+  float strength;
+};
 
 in vec2 pointInfo;
 
-uniform sampler3D keyframesTex;
-uniform sampler3D thicknessTex;
-uniform sampler3D colorTex;
+uniform sampler2D keyframesTex;
+uniform sampler2D thicknessTex;
+uniform sampler2D colorTex;
 uniform vec2 resolution;
 uniform Jitter jitter;
 uniform Jitter flicker;
 uniform Jitter defaults;
 uniform float progress;
 uniform vec2 scale;
+uniform float controlPointCounts[${controlPointCounts.length}];
 
 out vec2 vUv;
 out vec4 vColor;
 out float v_test;
-out float discardPoint;
 
 ${rotate2d}
 ${hash}
@@ -235,79 +203,47 @@ void main() {
   vec2 pixel = vec2(1. / resolution.x, 1. / resolution.y);
   float pointProgress = pointInfo.x;
   float curveProgress = pointInfo.y;
-  // find progress through keyframes and round to cycles to quadratic bezier based on curve progress
+  float controlPointsCount = controlPointCounts[
+    int(curveProgress) * controlPointCounts.length()];
   vec2 pointCurveProgress = 
     multiBezierProgress(pointProgress, int(controlPointsCount));
-  vec2 keyframeCurveProgress = 
-    multiBezierProgress(progress, 
-      loop ? int(keyframesCount) + 2 : int(keyframesCount));
   
   vec2 points[3];
-  float thickness;
   float strength;
+
   for (float pointI = 0.; pointI < 3.; pointI ++) {
-    vec4 keyframePoints[3];
-    for (int keyframeI = 0; keyframeI < 3; keyframeI ++) {
-      float keyframeProgress =
-        (keyframeCurveProgress.x + float(keyframeI)) 
-        / keyframesCount;
-      
-      keyframePoints[keyframeI] = texture(
-        keyframesTex,
-        vec3(
-          (pointCurveProgress.x + pointI) 
-            / controlPointsCount,   
-          curveProgress, 
-          keyframeProgress));
-    }
-    if (loop) {
-      keyframePoints[0] = 
-        mix(keyframePoints[0], keyframePoints[1], 0.5);
-      keyframePoints[2] = 
-        mix(keyframePoints[1], keyframePoints[2], 0.5);
-    } else {
-      if (keyframeCurveProgress.x != keyframesCount - 3.) {
-      keyframePoints[2] = 
-        mix(keyframePoints[1], keyframePoints[2], 0.5);
-      }
-      if (keyframeCurveProgress.x != 0.) {
-        keyframePoints[0] = 
-          mix(keyframePoints[0], keyframePoints[1], 0.5);
-      }
-    }
-    points[int(pointI)] = bezier2(
-      keyframeCurveProgress.y,
-      keyframePoints[0].xy, 
-      keyframePoints[1].xy, 
-      keyframePoints[2].xy);
+    vec4 samp = texture(
+      keyframesTex,
+      vec2(
+        (pointCurveProgress.x + pointI) 
+          / controlPointsCount,
+        curveProgress));
+    points[int(pointI)] = samp.xy;
     if (pointI == 1.) {
-      // bezier interpolate the strength of the curve
-      strength = bezier2(
-        keyframeCurveProgress.y,
-        vec2(0, keyframePoints[0].z), 
-        vec2(0.5, keyframePoints[1].z), 
-        vec2(1, keyframePoints[2].z)).y;
+      strength = samp.z;
     }
   }
+
   // adjust to interpolate between things
   if (pointCurveProgress.x > 0.) {
     points[0] = mix(points[0], points[1], 0.5);
-  } 
+  }
   if (pointCurveProgress.x < controlPointsCount - 3.) {
     points[2] = mix(points[1], points[2], 0.5);
   }
+
   BezierPoint point = bezierPoint(pointCurveProgress.y, 
     points[0], points[1], points[2], strength, aspectRatio);
   
   vColor = texture(
     colorTex, 
-    vec3(pointProgress, curveProgress, progress));
+    vec2(pointProgress, curveProgress));
   vColor.a *= 1. 
     - flicker.a
     + hash(1., .385 + progress) * flicker.a;
   float thisThickness = texture(
     thicknessTex, 
-    vec3(pointProgress, curveProgress, progress)).x;
+    vec2(pointProgress, curveProgress)).x;
 
   vec2 jitterPosition = jitter.position
     * (vec2(hash(point.position.x, .184 + progress), 

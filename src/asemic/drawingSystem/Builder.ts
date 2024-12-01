@@ -1,6 +1,5 @@
 import {
   AnyPixelFormat,
-  ClampToEdgeWrapping,
   Curve,
   CurvePath,
   Data3DTexture,
@@ -12,8 +11,6 @@ import {
   RedFormat,
   RepeatWrapping,
   RGBAFormat,
-  RGBFormat,
-  TypedArray,
   Vector2
 } from 'three'
 import { PointBuilder } from './PointBuilder'
@@ -277,9 +274,10 @@ export default class Builder {
     this.reset(true)
     const groups: {
       transform: TransformData
-      curvesTexLength: number
-      curvesTex: DataTexture
       totalCurveLength: number
+      curveLengths: Int16Array
+      curveIndexes: Int16Array
+      controlPointCounts: Int8Array
     }[] = []
 
     const width = max(
@@ -291,19 +289,10 @@ export default class Builder {
     const dimensions = new Vector2(width, height)
     let i = 0
     let curveIndex = 0
-    const createTexture = (array: TypedArray, format: AnyPixelFormat) => {
-      const tex = new DataTexture(array, width, height)
-      tex.format = format
-      tex.type = FloatType
-      tex.minFilter = tex.magFilter = NearestFilter
-      return tex
-    }
-
     this.keyframes[0].groups.forEach((group, groupIndex) => {
-      // const curveLengths = new Int16Array(group.curves.length)
-      // const curveIndexes = new Int16Array(group.curves.length)
-      // const controlPointCounts = new Int16Array(group.curves.length)
-      const curveInfo = new Float32Array(group.curves.length * 3)
+      const curveLengths = new Int16Array(group.curves.length)
+      const curveIndexes = new Int16Array(group.curves.length)
+      const controlPointCounts = new Int8Array(group.curves.length)
       let totalCurveLength = 0
       group.curves.forEach((curve, i) => {
         this.interpolateCurve(curve, width)
@@ -312,31 +301,29 @@ export default class Builder {
             curve.map(x => this.applyTransform(x.clone(), group.transform))
           ).getLength() * hypotenuse
         totalCurveLength += curveLength
-        // length, control point count, y-index
-        curveInfo[i * 3] = curveLength
-        curveInfo[i * 3 + 1] = curve.length
-        curveInfo[i * 3 + 2] = curveIndex
+        curveLengths[i] = curveLength
+        curveIndexes[i] = curveIndex
+        controlPointCounts[i] = curve.length
         curveIndex++
       })
-
       groups.push({
         transform: this.keyframes[0].groups[groupIndex].transform,
-        curvesTexLength: group.curves.length,
-        totalCurveLength,
-        curvesTex: new DataTexture(
-          curveInfo,
-          group.curves.length,
-          1,
-          RGBFormat,
-          FloatType,
-          undefined,
-          ClampToEdgeWrapping,
-          ClampToEdgeWrapping,
-          NearestFilter,
-          NearestFilter
-        )
+        curveLengths,
+        curveIndexes,
+        controlPointCounts,
+        totalCurveLength
       })
     })
+
+    const createTexture = (array: Float32Array, format: AnyPixelFormat) => {
+      const tex = new DataTexture(array, width, height)
+      tex.format = format
+      tex.type = FloatType
+      tex.minFilter = tex.magFilter = NearestFilter
+      tex.wrapS = tex.wrapT = RepeatWrapping
+      tex.needsUpdate = true
+      return tex
+    }
 
     const keyframesTex = createTexture(
       new Float32Array(
@@ -378,6 +365,7 @@ export default class Builder {
       ),
       RedFormat
     )
+
     return {
       keyframesTex,
       colorTex,

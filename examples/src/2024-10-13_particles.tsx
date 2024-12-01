@@ -14,7 +14,7 @@ export default function ParticlesTest() {
         g.getRandomAlong([0, 0], [1, 0]),
         g.getRandomAlong([0, 1], [1, 1])
       )
-    }, 100)
+    }, 1000)
   )
 
   return (

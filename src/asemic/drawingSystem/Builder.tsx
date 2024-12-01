@@ -209,11 +209,11 @@ export default class Builder {
     transformData: TransformData,
     nextTransformData: TransformData
   ) {
-    // transformData.translate.add(
-    //   nextTransformData.translate
-    //     .multiply(transformData.scale)
-    //     .rotateAround({ x: 0, y: 0 }, transformData.rotate)
-    // )
+    transformData.translate.add(
+      nextTransformData.translate
+        .multiply(transformData.scale)
+        .rotateAround({ x: 0, y: 0 }, transformData.rotate)
+    )
     transformData.rotate += nextTransformData.rotate
     transformData.scale.multiply(nextTransformData.scale)
     return transformData
@@ -1234,18 +1234,14 @@ export class Built extends Builder {
     const controlPointCounts: number[] = []
     const groups: { transform: TransformData }[] = []
 
-    const maxControlPoints = max(
-      this.keyframe.groups
-        .flatMap(x => x.curves.flatMap(x => x.length))
-        .concat([3])
-    )!
     this.keyframe.groups.forEach((group, groupIndex) => {
       groups.push({ transform: this.keyframe.groups[groupIndex].transform })
       group.curves.forEach((curve, curveIndex) => {
-        this.interpolateCurve(curve, maxControlPoints)
         controlPointCounts.push(curve.length)
       })
     })
+
+    const maxControlPoints = max(controlPointCounts)!
 
     const createTexture = (array: Float32Array, format: AnyPixelFormat) => {
       const tex = new DataTexture(
@@ -1277,10 +1273,9 @@ export class Built extends Builder {
     const colorTex = createTexture(
       new Float32Array(
         this.keyframe.groups.flatMap(group =>
-          group.curves.flatMap(c =>
-            range(maxControlPoints).flatMap(i => {
-              const point = c[i]
-              return point
+          group.curves.flatMap(x =>
+            x.flatMap(point =>
+              point
                 ? [
                     ...(point.color ??
                       group.settings.color ??
@@ -1289,7 +1284,7 @@ export class Built extends Builder {
                     point.alpha ?? defaults.a!
                   ]
                 : [0, 0, 0, 0]
-            })
+            )
           )
         )
       ),
@@ -1298,18 +1293,17 @@ export class Built extends Builder {
     const thicknessTex = createTexture(
       new Float32Array(
         this.keyframe.groups.flatMap(group =>
-          group.curves.flatMap(c =>
-            range(maxControlPoints).flatMap(i => {
-              const point = c[i]
-              return point
+          group.curves.flatMap(x =>
+            x.flatMap(point =>
+              point
                 ? [
                     point.thickness ??
                       group.settings.thickness ??
                       this.keyframe.settings.thickness ??
                       1
                   ]
-                : [0]
-            })
+                : [0, 0, 0, 0]
+            )
           )
         )
       ),
@@ -1354,7 +1348,7 @@ export class Built extends Builder {
     return { pointProgress }
   }
 
-  init() {
+  async init() {
     this.target({ groups: [0, 0], frames: [0, 0] })
     this.initialize(this)
     this.data = this.packToTexture()

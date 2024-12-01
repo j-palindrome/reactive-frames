@@ -174,11 +174,11 @@ export default function Brush(
                 keyframesTex: { value: keyframesTex },
                 thicknessTex: { value: thicknessTex },
                 colorTex: { value: colorTex },
-                scale: { value: new Vector2(1, 1) }
+                scale: { value: new Vector2(1, 1) },
+                controlPointCounts: { value: controlPointCounts }
               }}
               vertexShader={
                 /*glsl*/ `
-#define controlPointsCount ${controlPointsCount}.
 struct Jitter {
   vec2 size;
   vec2 position;
@@ -203,6 +203,7 @@ uniform Jitter flicker;
 uniform Jitter defaults;
 uniform float progress;
 uniform vec2 scale;
+uniform float controlPointCounts[${controlPointCounts.length}];
 
 out vec2 vUv;
 out vec4 vColor;
@@ -221,6 +222,8 @@ void main() {
   vec2 pixel = vec2(1. / resolution.x, 1. / resolution.y);
   float pointProgress = pointInfo.x;
   float curveProgress = pointInfo.y;
+  float controlPointsCount = controlPointCounts[
+    int(curveProgress) * controlPointCounts.length()];
   vec2 pointCurveProgress = 
     multiBezierProgress(pointProgress, int(controlPointsCount));
   

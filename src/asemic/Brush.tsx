@@ -1,6 +1,6 @@
 import { useFrame, useThree } from '@react-three/fiber'
-import { range, sumBy } from 'lodash'
-import { Ref, RefObject, useMemo, useRef } from 'react'
+import { now, range, sumBy } from 'lodash'
+import { Ref, RefObject, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { Vector2 } from 'three'
 import {
@@ -77,15 +77,16 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
   const resolution = useThree(state =>
     state.gl.getDrawingBufferSize(targetVector)
   )
+  const [data, setData] = useState(keyframes.packToTexture(resolution))
   const {
-    controlPointCounts,
     keyframesTex,
     colorTex,
     thicknessTex,
-    maxControlPoints,
-    groups
-  } = keyframes.packToTexture(resolution)
-  console.log(groups)
+    dimensions,
+
+    groups,
+    transform
+  } = data
 
   const meshRef = useRef<THREE.Group>(null!)
   const lastProgress = useRef(0)
@@ -99,35 +100,7 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
       defaultDraw={(self, frame, progress, ctx) => {
         if (typeof recalculate === 'function') progress = recalculate(progress)
         if (progress < lastProgress.current && recalculate) {
-          keyframes.reInitialize()
-          const frameTransform = keyframes.keyframes[0].transform
-
-          self.rotation.set(0, 0, frameTransform.rotate)
-          self.scale.set(...frameTransform.scale.toArray(), 1)
-          self.position.set(...frameTransform.translate.toArray(), 0)
-
-          const newTextures = keyframes.packToTexture(resolution)
-          self.children.forEach((c, i) => {
-            const child = c as THREE.InstancedMesh<
-              THREE.PlaneGeometry,
-              THREE.ShaderMaterial
-            >
-
-            child.material.uniforms.keyframesTex.value =
-              newTextures.keyframesTex
-            child.material.uniforms.colorTex.value = newTextures.colorTex
-            child.material.uniforms.thicknessTex.value =
-              newTextures.thicknessTex
-            child.material.uniforms.progress.value = progress
-            child.material.uniformsNeedUpdate = true
-            const { translate, scale, rotate } =
-              keyframes.keyframes[0].groups[i].transform
-            const scaleUniform: Vector2 = child.material.uniforms.scale.value
-            scaleUniform.set(1, 1).multiply(self.scale).multiply(scale)
-            child.position.set(translate.x, translate.y, 0)
-            child.scale.set(scale.x, scale.y, 1)
-            child.rotation.set(0, 0, rotate)
-          })
+          setData(keyframes.reInitialize().packToTexture(resolution))
         }
         lastProgress.current = progress
       }}
@@ -137,10 +110,17 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
       hide={self => {
         self.visible = false
       }}>
-      <group ref={meshRef}>
+      <group
+        ref={meshRef}
+        scale={[...transform.scale.toArray(), 1]}
+        rotation={[0, 0, transform.rotate]}
+        position={[...transform.translate.toArray(), 0]}>
         {groups.map((group, i) => (
           <instancedMesh
-            key={i}
+            position={[...group.transform.translate.toArray(), 0]}
+            scale={[...group.transform.scale.toArray(), 1]}
+            rotation={[0, 0, group.transform.rotate]}
+            key={i + now()}
             args={[undefined, undefined, group.totalCurveLength]}>
             <planeGeometry args={[defaults.size![0], defaults.size![1]]} />
             <shaderMaterial
@@ -155,10 +135,10 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
                 defaults: { value: defaults },
                 progress: { value: 0 },
                 scale: { value: new Vector2(1, 1) },
-                controlPointCounts: { value: controlPointCounts },
-                maxControlPoints: { value: maxControlPoints },
+                dimensions: { value: dimensions },
                 curveLengths: { value: group.curveLengths },
-                curveIndexes: { value: group.curveIndexes }
+                curveIndexes: { value: group.curveIndexes },
+                controlPointCounts: { value: group.controlPointCounts }
               }}
               vertexShader={
                 /*glsl*/ `
@@ -184,10 +164,10 @@ uniform Jitter flicker;
 uniform Jitter defaults;
 uniform float progress;
 uniform vec2 scale;
-uniform float controlPointCounts[${controlPointCounts.length}];
-uniform float maxControlPoints;
-uniform float curveLengths[${group.curveLengths.length}];
-uniform float curveIndexes[${group.curveIndexes.length}];
+uniform vec2 dimensions;
+uniform int controlPointCounts[${group.controlPointCounts.length}];
+uniform int curveLengths[${group.curveLengths.length}];
+uniform int curveIndexes[${group.curveIndexes.length}];
 
 out vec2 vUv;
 out vec4 vColor;
@@ -205,22 +185,21 @@ void main() {
   vec2 aspectRatio = vec2(1, resolution.y / resolution.x);
   vec2 pixel = vec2(1. / resolution.x, 1. / resolution.y);
 
-  float id = float(gl_InstanceID);
-  float totalLength = curveLengths[0];
-  float lastLength = 0.;
+  int id = gl_InstanceID;
+  int totalLength = curveLengths[0];
+  int lastLength = 0;
   int curveIndex = 0;
   while (id > totalLength) {
     curveIndex++;
     lastLength = totalLength;
     totalLength += curveLengths[curveIndex];
   }
-  float pointProgress = (id - lastLength) / curveLengths[curveIndex];
-  float curveProgress = curveIndexes[curveIndex];
-
-  float controlPointsCount = controlPointCounts[
-    int(curveProgress * float(controlPointCounts.length()))];
+  float pointProgress = float(id - lastLength) / float(curveLengths[curveIndex]);
+  float curveProgress = float(curveIndexes[curveIndex]) / dimensions.y;
+  int controlPointsCount = controlPointCounts[curveIndex];
+  
   vec2 pointCurveProgress = 
-    multiBezierProgress(pointProgress, int(controlPointsCount));
+    multiBezierProgress(pointProgress, controlPointsCount);
   vec2 points[3];
   float strength;
 
@@ -229,7 +208,7 @@ void main() {
       keyframesTex,
       vec2(
         (pointCurveProgress.x + pointI) 
-          / maxControlPoints,
+          / dimensions.x,
         curveProgress));
     points[int(pointI)] = samp.xy;
     if (pointI == 1.) {
@@ -241,7 +220,7 @@ void main() {
   if (pointCurveProgress.x > 0.) {
     points[0] = mix(points[0], points[1], 0.5);
   }
-  if (pointCurveProgress.x < controlPointsCount - 3.) {
+  if (pointCurveProgress.x < float(controlPointsCount) - 3.) {
     points[2] = mix(points[1], points[2], 0.5);
   }
   BezierPoint point = bezierPoint(pointCurveProgress.y, 

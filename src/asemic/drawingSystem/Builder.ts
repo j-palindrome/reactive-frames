@@ -172,7 +172,7 @@ export default class Builder {
     return transformData
   }
 
-  toPoints(...coordinates: Coordinate[]) {
+  toPoints(...coordinates: (Coordinate | PointBuilder)[]) {
     return coordinates.map(x => this.toPoint(x))
   }
 
@@ -272,57 +272,51 @@ export default class Builder {
     }
 
     this.reset(true)
-    const totalCurves = sum(this.keyframes[0].groups.map(x => x.curves.length))
-    const controlPointCounts: Float32Array = new Float32Array(totalCurves)
     const groups: {
       transform: TransformData
       totalCurveLength: number
-      curveLengths: number[]
-      curveIndexes: number[]
+      curveLengths: Int16Array
+      curveIndexes: Int16Array
+      controlPointCounts: Int8Array
     }[] = []
 
-    const maxControlPoints = max(
+    const width = max(
       this.keyframes[0].groups
         .flatMap(x => x.curves.flatMap(x => x.length))
         .concat([3])
     )!
+    const height = sum(this.keyframes[0].groups.map(x => x.curves.length))
+    const dimensions = new Vector2(width, height)
     let i = 0
     let curveIndex = 0
     this.keyframes[0].groups.forEach((group, groupIndex) => {
-      const curveLengths: number[] = []
-      const curveIndexes: number[] = []
+      const curveLengths = new Int16Array(group.curves.length)
+      const curveIndexes = new Int16Array(group.curves.length)
+      const controlPointCounts = new Int8Array(group.curves.length)
       let totalCurveLength = 0
       group.curves.forEach((curve, i) => {
-        this.interpolateCurve(curve, maxControlPoints)
-        const curveLength = this.makeCurvePath(curve).getLength() * hypotenuse
+        this.interpolateCurve(curve, width)
+        const curveLength =
+          this.makeCurvePath(
+            curve.map(x => this.applyTransform(x.clone(), group.transform))
+          ).getLength() * hypotenuse
         totalCurveLength += curveLength
-        curveLengths.push(curveLength)
-        curveIndexes.push(curveIndex / totalCurves)
+        curveLengths[i] = curveLength
+        curveIndexes[i] = curveIndex
         controlPointCounts[i] = curve.length
-        // TODO reinsert spacing
-        // const pointsInCurve = (curveLength * hypotenuse) / defaults.size[0]
-        // const r = range(pointsInCurve).flatMap(vertexI => {
-        //   const pointProg = vertexI / (pointsInCurve - 1)
-        //   const curveProg = curveIndex / totalCurves
-        //   // sample from middle of pixels
-        //   return [pointProg, curveProg]
-        // })
         curveIndex++
       })
       groups.push({
         transform: this.keyframes[0].groups[groupIndex].transform,
         curveLengths,
         curveIndexes,
+        controlPointCounts,
         totalCurveLength
       })
     })
 
     const createTexture = (array: Float32Array, format: AnyPixelFormat) => {
-      const tex = new DataTexture(
-        array,
-        maxControlPoints,
-        controlPointCounts.length
-      )
+      const tex = new DataTexture(array, width, height)
       tex.format = format
       tex.type = FloatType
       tex.minFilter = tex.magFilter = NearestFilter
@@ -335,7 +329,7 @@ export default class Builder {
       new Float32Array(
         this.keyframes[0].groups.flatMap(x =>
           x.curves.flatMap(c =>
-            range(maxControlPoints).flatMap(i => {
+            range(width).flatMap(i => {
               return c[i] ? [c[i].x, c[i].y, c[i].strength, 1] : [0, 0, 0, 0]
             })
           )
@@ -347,7 +341,7 @@ export default class Builder {
       new Float32Array(
         this.keyframes[0].groups.flatMap(group =>
           group.curves.flatMap(c =>
-            range(maxControlPoints).flatMap(i => {
+            range(width).flatMap(i => {
               const point = c[i]
               return point
                 ? [...(point.color ?? defaults.hsl), point.alpha ?? defaults.a!]
@@ -362,7 +356,7 @@ export default class Builder {
       new Float32Array(
         this.keyframes[0].groups.flatMap(group =>
           group.curves.flatMap(c =>
-            range(maxControlPoints).flatMap(i => {
+            range(width).flatMap(i => {
               const point = c[i]
               return point ? [point.thickness ?? 1] : [0]
             })
@@ -376,10 +370,9 @@ export default class Builder {
       keyframesTex,
       colorTex,
       thicknessTex,
-      controlPointCounts,
       transform: this.keyframes[0].transform,
       groups,
-      maxControlPoints
+      dimensions
     }
   }
 
@@ -812,13 +805,13 @@ ${g.curves
     return this
   }
 
-  newCurve(...points: Coordinate[]) {
+  newCurve(...points: (Coordinate | PointBuilder)[]) {
     this.keyframes[0].groups[this.TargetInfo[0]].curves.push([])
     this.lastCurve(c => c.push(...this.toPoints(...points)))
     return this
   }
 
-  newPoints(...points: Coordinate[]) {
+  newPoints(...points: (Coordinate | PointBuilder)[]) {
     return this.lastCurve(c => c.push(...this.toPoints(...points)))
   }
 
@@ -1326,6 +1319,7 @@ ${g.curves
     this.target([0, 0], [0, 0])
     this.keyframes = [this.defaultKeyframe()]
     this.initialize(this)
+    return this
   }
 
   constructor(initialize: (builder: Builder) => Builder) {

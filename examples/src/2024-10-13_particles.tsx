@@ -8,13 +8,13 @@ import { QuadraticBezierCurve, Vector2 } from 'three'
 export default function ParticlesTest() {
   // abcdefghijklmnopqrstuvwxyz
   // a poem in space
-  const kf = new Builder(
-    g =>
-      g
-        .newGroup()
-        .newCurve([0, 0], [1, 1, { scale: g.getRandomAlong([0, 0], [1, 1]) }])
-    // .newCurve()
-    // .newShape('circle', { reset: true, translate: g.getLastPoint(-1, -2) })
+  const kf = new Builder(g =>
+    g.newGroup().eval(() => {
+      g.newCurve(
+        g.getRandomAlong([0, 0], [1, 0]),
+        g.getRandomAlong([0, 1], [1, 1])
+      )
+    }, 1000)
   )
 
   return (

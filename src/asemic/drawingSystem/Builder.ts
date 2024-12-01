@@ -261,8 +261,7 @@ export default class Builder {
     return this
   }
 
-  packToTexture(resolution: Vector2) {
-    const hypotenuse = resolution.length()
+  packToTexture() {
     const defaults: Required<Jitter> = {
       hsl: [1, 1, 1],
       a: 1,
@@ -274,8 +273,7 @@ export default class Builder {
     this.reset(true)
     const totalCurves = sum(this.keyframes[0].groups.map(x => x.curves.length))
     const controlPointCounts: Float32Array = new Float32Array(totalCurves)
-    const groups: { transform: TransformData; pointProgress: Float32Array }[] =
-      []
+    const groups: { transform: TransformData }[] = []
 
     const maxControlPoints = max(
       this.keyframes[0].groups
@@ -283,37 +281,19 @@ export default class Builder {
         .concat([3])
     )!
     let i = 0
-    let curveIndex = 0
     this.keyframes[0].groups.forEach((group, groupIndex) => {
-      const curveLengths = group.curves.map(
-        x => this.makeCurvePath(x).getLength() * hypotenuse
-      )
-      const pointProgress = Float32Array.from(
-        group.curves.flatMap((curve, i) => {
-          curveIndex++
-          // TODO reinsert spacing
-          const curveLength = curveLengths[i]
-          const pointsInCurve = (curveLength * hypotenuse) / defaults.size[0]
-          const r = range(pointsInCurve).flatMap(vertexI => {
-            const pointProg = vertexI / (pointsInCurve - 1)
-            const curveProg = curveIndex / totalCurves
-            // sample from middle of pixels
-            return [pointProg, curveProg]
-          })
-          curveIndex++
-          return r
-        })
-      )
-      groups.push({
-        transform: this.keyframes[0].groups[groupIndex].transform,
-        pointProgress
-      })
+      groups.push({ transform: this.keyframes[0].groups[groupIndex].transform })
       group.curves.forEach((curve, curveIndex) => {
         this.interpolateCurve(curve, maxControlPoints)
         controlPointCounts[i] = curve.length
         i++
       })
     })
+
+    const totalInstances = 0
+    const curveLengths = this.keyframes[0].groups.map(x =>
+      x.curves.map(x => this.makeCurvePath(x).getLength())
+    )
 
     const createTexture = (array: Float32Array, format: AnyPixelFormat) => {
       const tex = new DataTexture(
@@ -377,9 +357,34 @@ export default class Builder {
       controlPointCounts,
       transform: this.keyframes[0].transform,
       groups,
-      maxControlPoints
+      maxControlPoints,
+      curveLengths
     }
   }
+
+  // packToAttributes(resolution: [number, number], spacing, size = [1, 1]) {
+  //   let curveIndex = 0
+
+  //   const totalCurves = sum(this.keyframes[0].groups.map(x => x.curves.length))
+  //   const pointProgress = curveLengths.map(group => {
+  //     const thisPointProgress = Float32Array.from(
+  //       group.flatMap(curveLength => {
+  //         const pointsInCurve =
+  //           (curveLength * resolution[0]) / (spacing ?? 1 * size[0])
+  //         const r = range(pointsInCurve).flatMap(vertexI => {
+  //           const pointProg = vertexI / (pointsInCurve - 1)
+  //           const curveProg = curveIndex / Math.max(1, totalCurves)
+  //           // sample from middle of pixels
+  //           return [pointProg, curveProg]
+  //         })
+  //         curveIndex++
+  //         return r
+  //       })
+  //     )
+  //     return thisPointProgress
+  //   })
+  //   return { pointProgress }
+  // }
 
   getTransformAt(
     transforms: TransformData[],

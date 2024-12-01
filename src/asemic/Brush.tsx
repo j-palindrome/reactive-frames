@@ -156,9 +156,9 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
                 progress: { value: 0 },
                 scale: { value: new Vector2(1, 1) },
                 controlPointCounts: { value: controlPointCounts },
-                maxControlPoints: { value: maxControlPoints }
-                // curveLengths: { value: group.curveLengths },
-                // curveIndexes: { value: group.curveIndexes }
+                maxControlPoints: { value: maxControlPoints },
+                curveLengths: { value: group.curveLengths },
+                curveIndexes: { value: group.curveIndexes }
               }}
               vertexShader={
                 /*glsl*/ `
@@ -186,6 +186,8 @@ uniform float progress;
 uniform vec2 scale;
 uniform float controlPointCounts[${controlPointCounts.length}];
 uniform float maxControlPoints;
+uniform float curveLengths[${group.curveLengths.length}];
+uniform float curveIndexes[${group.curveIndexes.length}];
 
 out vec2 vUv;
 out vec4 vColor;
@@ -203,10 +205,17 @@ void main() {
   vec2 aspectRatio = vec2(1, resolution.y / resolution.x);
   vec2 pixel = vec2(1. / resolution.x, 1. / resolution.y);
 
-  // float id = float(gl_InstanceID);
-  float pointProgress = 0.;
-  float curveProgress = 0.;
-
+  float id = float(gl_InstanceID);
+  float totalLength = curveLengths[0];
+  float lastLength = 0.;
+  int curveIndex = 0;
+  while (id > totalLength) {
+    curveIndex++;
+    lastLength = totalLength;
+    totalLength += curveLengths[curveIndex];
+  }
+  float pointProgress = (id - lastLength) / curveLengths[curveIndex];
+  float curveProgress = curveIndexes[curveIndex];
 
   float controlPointsCount = controlPointCounts[
     int(curveProgress * float(controlPointCounts.length()))];

@@ -129,20 +129,17 @@ export default class Builder {
 
   protected toTransform(transform: PreTransformData): TransformData {
     const transformData: TransformData = {
-      scale: new PointBuilder(this, [1, 1]),
+      scale: new PointBuilder([1, 1]),
       rotate: 0,
-      translate: new PointBuilder(this)
+      translate: new PointBuilder()
     }
     if (transform.remap) {
       v1.copy(this.toPoint(transform.remap[0]))
       v2.copy(this.toPoint(transform.remap[1]))
 
       const rotate = v2.clone().sub(v1).angle()
-      const scale = new PointBuilder(this, [
-        v1.distanceTo(v2),
-        v1.distanceTo(v2)
-      ])
-      const translate = new PointBuilder(this).copy(v1)
+      const scale = new PointBuilder([v1.distanceTo(v2), v1.distanceTo(v2)])
+      const translate = new PointBuilder().copy(v1)
 
       const tf: TransformData = {
         scale,
@@ -176,7 +173,7 @@ export default class Builder {
     }
 
     return this.applyTransformData(
-      new PointBuilder(this, [coordinate[0], coordinate[1]], coordinate[2]),
+      new PointBuilder([coordinate[0], coordinate[1]], coordinate[2]),
       this.transformData
     )
   }
@@ -191,10 +188,7 @@ export default class Builder {
     for (let i = 0; i < controlPointsCount; i++) {
       const u = i / (controlPointsCount - 1)
       newCurvePoints.push(
-        new PointBuilder(
-          this,
-          newCurve.getPointAt(u).toArray() as [number, number]
-        )
+        new PointBuilder(newCurve.getPointAt(u).toArray() as [number, number])
       )
 
       curve.splice(0, curve.length, ...newCurvePoints)
@@ -439,8 +433,8 @@ export default class Builder {
 
   debug() {
     console.log(
-      cloneDeep(this.keyframe)
-        .groups.slice(this.targetGroups[0], this.targetGroups[1] + 1)
+      this.keyframe.groups
+        .slice(this.targetGroups[0], this.targetGroups[1] + 1)
         .map(
           g =>
             `*${g.transform.scale.toArray().map(x => x.toFixed(2))} @${
@@ -962,9 +956,7 @@ ${g.curves
   getRandomAlong(...curve: Coordinate[]) {
     const curvePoints = curve.map(x => this.toPoint(x))
     const curvePath = this.makeCurvePath(curvePoints)
-    return new PointBuilder(this, [0, 0]).copy(
-      curvePath.getPointAt(Math.random())
-    )
+    return new PointBuilder([0, 0]).copy(curvePath.getPointAt(Math.random()))
   }
 
   getRandomWithin(origin: number, variation: number): number
@@ -1031,9 +1023,9 @@ ${g.curves
     }
     const fullIntersects = sortBy(intersects, v => v.distanceTo(linePath[0]))
     if (!fullIntersects[0]) {
-      return new PointBuilder(this).copy(linePath[1])
+      return new PointBuilder().copy(linePath[1])
     }
-    return new PointBuilder(this).copy(fullIntersects[0])
+    return new PointBuilder().copy(fullIntersects[0])
   }
 
   eval(func: (g: this, progress: number) => void, runCount = 1) {
@@ -1168,7 +1160,7 @@ ${g.curves
         : undefined
       const rotationPath = groupRotate
         ? this.makeCurvePath(
-            groupRotate.map(x => new PointBuilder(this, [this.toRad(x[0]), 0]))
+            groupRotate.map(x => new PointBuilder([this.toRad(x[0]), 0]))
           )
         : undefined
       const scalePath = groupScale
@@ -1177,10 +1169,10 @@ ${g.curves
       this.eachGroup(
         (g, self, { groupProgress }) => {
           self.combineTransforms(g.transform, {
-            translate: new PointBuilder(this).copy(
+            translate: new PointBuilder().copy(
               translationPath?.getPoint(groupProgress) ?? new Vector2(0, 0)
             ),
-            scale: new PointBuilder(this).copy(
+            scale: new PointBuilder().copy(
               scalePath?.getPoint(groupProgress) ?? new Vector2(1, 1)
             ),
             rotate: rotationPath?.getPoint(groupProgress).x ?? 0
@@ -1328,7 +1320,8 @@ export class Built extends Builder {
       thicknessTex,
       curveLengths,
       controlPointsCount,
-      keyframe: cloneDeep(this.keyframe)
+      transform: this.keyframe.transform,
+      groups: this.keyframe.groups.map(x => ({ transform: x.transform }))
     }
   }
 

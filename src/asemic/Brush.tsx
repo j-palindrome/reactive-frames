@@ -34,7 +34,7 @@ export type BrushSettings = {
   defaults?: Jitter
   jitter?: Jitter
   flicker?: Jitter
-  recalculate?: false | number
+  recalculate?: boolean | ((progress: number) => number)
   modifyColor?: string
   modifyPosition?: string
 }
@@ -120,7 +120,6 @@ export default function Brush(
     })
     return { pointProgress }
   }, [resolution, curveCount])
-
   const meshRef = useRef<THREE.Group>(null!)
   const lastProgress = useRef(0)
 
@@ -131,8 +130,9 @@ export default function Brush(
         return meshRef.current
       }}
       defaultDraw={(self, frame, progress, ctx) => {
-        const frameTransform = keyframes.data.keyframe.transform
+        const frameTransform = keyframes.data.transform
 
+        if (typeof recalculate === 'function') progress = recalculate(progress)
         if (progress < lastProgress.current && recalculate) {
           keyframes.reInitialize()
           self.children.forEach(c => {
@@ -162,7 +162,7 @@ export default function Brush(
           >
           child.material.uniforms.progress.value = progress
           child.material.uniformsNeedUpdate = true
-          const transform = keyframes.data.keyframe.groups[i].transform
+          const transform = keyframes.data.groups[i].transform
           const { translate, scale, rotate } = transform
           const scaleUniform: Vector2 = child.material.uniforms.scale.value
           scaleUniform.set(1, 1).multiply(self.scale).multiply(scale)

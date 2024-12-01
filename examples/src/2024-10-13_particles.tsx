@@ -14,7 +14,7 @@ wholesome > +0.1,0.5 *0.8 @[0 0.5] *[0.5 2 0.4] > +0,-0.5 *[0.5 2] @[-1 1] >0
   return (
     <Reactive
       progress={t => {
-        return (t / 2) % 1
+        return (t * 10) % 1
       }}>
       <Asemic
         name='a'
@@ -30,33 +30,8 @@ wholesome > +0.1,0.5 *0.8 @[0 0.5] *[0.5 2 0.4] > +0,-0.5 *[0.5 2] @[-1 1] >0
                         translate: [Math.random(), 0]
                       }
                     })
-                    .newPoints([0, 0], [1, 1])
-                // g.eval(g => {
-                //   g.newBlankFrame().eval(g => {
-                //     g.newGroup()
-                //       .newShape('circle')
-                //       .setWarpGroups([
-                //         {
-                //           translate: g.getRandomWithin(
-                //             [0.5, 0.5],
-                //             [0.3, 0.3]
-                //           ),
-                //           scale: g.getRandomWithin(0.1, 0.1)
-                //         }
-                //       ])
-                //       .newGroup({ transform: { reset: true } })
-                //       .newPoints(g.getRandomAlong([0, 0], [1, 0]))
-                //       .newPoints(
-                //         g.newIntersect(
-                //           [
-                //             g.getLastPoint(),
-                //             g.getLastGroup(-2).transform.translate
-                //           ],
-                //           { curve: 0, group: -2 }
-                //         )
-                //       )
-                //   }, 100)
-                // }, 2),
+                    .newPoints([0, 0], [1, 1]),
+                { recalculate: true }
               )
           )
         }

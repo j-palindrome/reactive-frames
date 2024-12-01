@@ -3,29 +3,25 @@ import { PointBuilder } from './drawingSystem/PointBuilder'
 import Builder from './drawingSystem/Builder'
 
 declare global {
-  type Coordinate =
-    | [number, number, PreTransformData & CoordinateMetaData]
-    | [number, number]
-
-  type TargetGroups = { groups?: TargetInfo; frames?: TargetInfo }
+  type Coordinate = [number, number, CoordinateData] | [number, number]
 
   type TransformData = {
-    translate: PointBuilder
-    scale: PointBuilder
+    translate: Vector2
+    scale: Vector2
     rotate: number
   }
 
-  type PreTransformData = {
+  type CoordinateTransform = {
     push?: true
     reset?: true | 'last' | 'pop'
-    translate?: [number, number] | PointBuilder
-    scale?: [number, number] | number | PointBuilder
+    translate?: [number, number]
+    scale?: [number, number] | number
     rotate?: number
-    origin?: [number, number] | PointBuilder
-    remap?: [[number, number] | PointBuilder, [number, number] | PointBuilder]
+    origin?: [number, number]
+    remap?: [[number, number], [number, number]]
   }
 
-  type CoordinateMetaData = {
+  type CoordinateData = CoordinateTransform & {
     strength?: number
     thickness?: number
     color?: [number, number, number]
@@ -35,19 +31,5 @@ declare global {
   type GroupData = {
     curves: PointBuilder[][]
     transform: TransformData
-    settings: CoordinateMetaData
-  }
-
-  type FrameData = {
-    groups: GroupData[]
-    transform: TransformData
-    settings: CoordinateMetaData
-    frameSettings: { duration: number; strength: number }
-  }
-
-  type ParserData = {
-    args: string[]
-    namedArgs: Record<string, { type: string; aliases: string[] }>
-    aliases: string[]
   }
 }

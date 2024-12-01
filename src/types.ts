@@ -18,13 +18,7 @@ export type ParentProps<Props, Self> = Props & {
   setup?: (self: Self, context: ReactiveContext) => void
   deps?: DepsOptions
   children?: React.ReactElement | React.ReactElement[]
-  timeOptions?: TimeOptions
-}
-
-export type TimeOptions = {
-  duration?: number
-  offset?: number
-  modifyTime?: (t: number) => number
+  startEnd?: [number, number]
 }
 
 export type ChildProps<Props, Self, Parent> = Props & {
@@ -37,7 +31,7 @@ export type ChildProps<Props, Self, Parent> = Props & {
   ) => void
   setup?: (self: Self, parent: Parent, context: ReactiveContext) => void
   deps?: DepsOptions
-  timeOptions?: TimeOptions
+  startEnd?: [number, number]
 } & React.PropsWithChildren
 
 export type ComponentType = {

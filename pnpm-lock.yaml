@@ -41,9 +41,6 @@ importers:
       animejs:
         specifier: ^3.2.2
         version: 3.2.2
-      earcut:
-        specifier: ^3.0.0
-        version: 3.0.0
       framer-motion:
         specifier: ^11.11.9
         version: 11.11.9(react-dom@18.3.1)(react@18.3.1)
@@ -1886,10 +1883,6 @@ packages:
 
   /draco3d@1.5.7:
     resolution: {integrity: sha512-m6WCKt/erDXcw+70IJXnG7M3awwQPAsZvJGX5zY7beBqpELw6RDGkYVU0W43AFxye4pDZ5i2Lbyc/NNGqwjUVQ==}
-    dev: false
-
-  /earcut@3.0.0:
-    resolution: {integrity: sha512-41Fs7Q/PLq1SDbqjsgcY7GA42T0jvaCNGXgGtsNdvg+Yv8eIu06bxv4/PoREkZ9nMDNwnUSG9OFB9+yv8eKhDg==}
     dev: false
 
   /eastasianwidth@0.2.0:

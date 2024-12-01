@@ -85,7 +85,6 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
     maxControlPoints,
     groups
   } = keyframes.packToTexture(resolution)
-  console.log(groups)
 
   const meshRef = useRef<THREE.Group>(null!)
   const lastProgress = useRef(0)
@@ -141,8 +140,13 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
         {groups.map((group, i) => (
           <instancedMesh
             key={i}
-            args={[undefined, undefined, group.totalCurveLength]}>
-            <planeGeometry args={[defaults.size![0], defaults.size![1]]} />
+            args={[undefined, undefined, group.pointProgress.length / 2]}>
+            <planeGeometry args={[defaults.size![0], defaults.size![1]]}>
+              <instancedBufferAttribute
+                attach='attributes-pointInfo'
+                args={[group.pointProgress, 2]}
+              />
+            </planeGeometry>
             <shaderMaterial
               transparent
               uniforms={{
@@ -157,8 +161,6 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
                 scale: { value: new Vector2(1, 1) },
                 controlPointCounts: { value: controlPointCounts },
                 maxControlPoints: { value: maxControlPoints }
-                // curveLengths: { value: group.curveLengths },
-                // curveIndexes: { value: group.curveIndexes }
               }}
               vertexShader={
                 /*glsl*/ `
@@ -174,6 +176,8 @@ struct KeyframeInfo {
   float start;
   float strength;
 };
+
+in vec2 pointInfo;
 
 uniform sampler2D keyframesTex;
 uniform sampler2D thicknessTex;
@@ -202,12 +206,8 @@ vec2 modifyPosition(vec2 position) {
 void main() {
   vec2 aspectRatio = vec2(1, resolution.y / resolution.x);
   vec2 pixel = vec2(1. / resolution.x, 1. / resolution.y);
-
-  // float id = float(gl_InstanceID);
-  float pointProgress = 0.;
-  float curveProgress = 0.;
-
-
+  float pointProgress = pointInfo.x;
+  float curveProgress = pointInfo.y;
   float controlPointsCount = controlPointCounts[
     int(curveProgress * float(controlPointCounts.length()))];
   vec2 pointCurveProgress = 

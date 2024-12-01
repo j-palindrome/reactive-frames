@@ -149,13 +149,21 @@ export default class Builder {
       return this.combineTransforms(tf, this.toTransform(transform))
     }
     if (transform.translate) {
-      transformData.translate.add(this.toPoint(transform.translate))
+      transformData.translate.add(
+        transform.translate instanceof PointBuilder
+          ? transform.translate
+          : new PointBuilder(transform.translate)
+      )
     }
     if (transform.scale) {
       if (typeof transform.scale === 'number') {
         transformData.scale.multiplyScalar(transform.scale)
       } else {
-        transformData.scale.multiply(this.toPoint(transform.scale))
+        transformData.scale.multiply(
+          transform.scale instanceof PointBuilder
+            ? transform.scale
+            : new PointBuilder(transform.scale)
+        )
       }
     }
     if (transform.rotate !== undefined) {
@@ -702,7 +710,7 @@ export default class Builder {
 
   debug() {
     console.log(
-      cloneDeep(this.keyframes)
+      this.keyframes
         .slice(this.targetFrames[0], this.targetFrames[1] + 1)
         .map(x =>
           x.groups
@@ -861,6 +869,7 @@ ${g.curves
     if (transform.push) {
       this.transforms.push(cloneDeep(this.transformData))
     }
+
     return this
   }
 
@@ -993,7 +1002,7 @@ ${g.curves
       }),
     m: () =>
       this.newCurve([0, 0, { scale: [0.5, 0.5] }], [0, 1], [1, 1], [1, 0])
-        .newCurve([0, 0, { translate: [1, 0] }], [0, 1], [1, 1], [1, 0])
+        .newCurve([0, 0, { translate: [0.5, 0] }], [0, 1], [1, 1], [1, 0])
         .transform({ translate: [1, 0], reset: 'last' }),
     n: () =>
       this.newCurve(
@@ -1004,9 +1013,8 @@ ${g.curves
       ).transform({ translate: [0.5, 0], reset: 'last' }),
     o: () =>
       this.newCurve()
-        .newShape('circle')
-        .within([0, 0, { reset: 'pop' }], [0.5, 0.5])
-        .transform({ translate: [0.5, 0] }),
+        .newShape('circle', { scale: [0.2, 0.25], translate: [0.25, 0.25] })
+        .transform({ reset: true, translate: [0.5, 0] }),
     p: () =>
       this.newCurve([0, 0, { translate: [0, -0.5] }], [0, 1])
         .newCurve(
@@ -1029,7 +1037,6 @@ ${g.curves
           [-1, -0.3],
           [0, 0]
         )
-        .debug()
         .within([0, -0.5, { reset: 'last' }], [0.5, 0.5])
         .transform({ translate: [0.5, 0] }),
     r: () =>

@@ -274,8 +274,12 @@ export default class Builder {
     this.reset(true)
     const totalCurves = sum(this.keyframes[0].groups.map(x => x.curves.length))
     const controlPointCounts: Float32Array = new Float32Array(totalCurves)
-    const groups: { transform: TransformData; pointProgress: Float32Array }[] =
-      []
+    const groups: {
+      transform: TransformData
+      totalCurveLength: number
+      curveLengths: number[]
+      curveIndexes: number[]
+    }[] = []
 
     const maxControlPoints = max(
       this.keyframes[0].groups
@@ -285,33 +289,31 @@ export default class Builder {
     let i = 0
     let curveIndex = 0
     this.keyframes[0].groups.forEach((group, groupIndex) => {
-      const curveLengths = group.curves.map(
-        x => this.makeCurvePath(x).getLength() * hypotenuse
-      )
-      const pointProgress = Float32Array.from(
-        group.curves.flatMap((curve, i) => {
-          curveIndex++
-          // TODO reinsert spacing
-          const curveLength = curveLengths[i]
-          const pointsInCurve = (curveLength * hypotenuse) / defaults.size[0]
-          const r = range(pointsInCurve).flatMap(vertexI => {
-            const pointProg = vertexI / (pointsInCurve - 1)
-            const curveProg = curveIndex / totalCurves
-            // sample from middle of pixels
-            return [pointProg, curveProg]
-          })
-          curveIndex++
-          return r
-        })
-      )
+      const curveLengths: number[] = []
+      const curveIndexes: number[] = []
+      let totalCurveLength = 0
+      group.curves.forEach((curve, i) => {
+        this.interpolateCurve(curve, maxControlPoints)
+        const curveLength = this.makeCurvePath(curve).getLength() * hypotenuse
+        totalCurveLength += curveLength
+        curveLengths.push(curveLength)
+        curveIndexes.push(curveIndex / totalCurves)
+        controlPointCounts[i] = curve.length
+        // TODO reinsert spacing
+        // const pointsInCurve = (curveLength * hypotenuse) / defaults.size[0]
+        // const r = range(pointsInCurve).flatMap(vertexI => {
+        //   const pointProg = vertexI / (pointsInCurve - 1)
+        //   const curveProg = curveIndex / totalCurves
+        //   // sample from middle of pixels
+        //   return [pointProg, curveProg]
+        // })
+        curveIndex++
+      })
       groups.push({
         transform: this.keyframes[0].groups[groupIndex].transform,
-        pointProgress
-      })
-      group.curves.forEach((curve, curveIndex) => {
-        this.interpolateCurve(curve, maxControlPoints)
-        controlPointCounts[i] = curve.length
-        i++
+        curveLengths,
+        curveIndexes,
+        totalCurveLength
       })
     })
 

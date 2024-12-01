@@ -30,11 +30,7 @@ wholesome > +0.1,0.5 *0.8 @[0 0.5] *[0.5 2 0.4] > +0,-0.5 *[0.5 2] @[-1 1] >0
                         translate: [Math.random(), 0]
                       }
                     })
-                    .newPoints([0, 0], [1, 0])
-                    .newFrame()
-                    .eachGroup(g =>
-                      p.setTransformAt({ translate: [1, 0] }, g.transform)
-                    ),
+                    .newPoints([0, 0], [1, 1])
                 // g.eval(g => {
                 //   g.newBlankFrame().eval(g => {
                 //     g.newGroup()
@@ -61,14 +57,6 @@ wholesome > +0.1,0.5 *0.8 @[0 0.5] *[0.5 2 0.4] > +0,-0.5 *[0.5 2] @[-1 1] >0
                 //       )
                 //   }, 100)
                 // }, 2),
-
-                {
-                  // timeOptions: {
-                  //   modifyTime: t => ((t + i / 3) * (i / 10 + 0.5)) % 1
-                  // },
-                  loop: false,
-                  recalculate: 1
-                }
               )
           )
         }

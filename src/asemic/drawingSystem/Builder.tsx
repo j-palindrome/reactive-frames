@@ -1228,20 +1228,21 @@ export class Built extends Builder {
       rotation: 0
     }
 
-    const keyframe = this.keyframe
     this.reset(true)
-    const curveCounts = keyframe[0].groups.flatMap(x => x.curves).length
+    const curveCounts = this.keyframe.groups.flatMap(x => x.curves).length
 
     const controlPointsCount = max(
-      keyframe.groups.flatMap(x => x.curves.flatMap(x => x.length)).concat([3])
+      this.keyframe.groups
+        .flatMap(x => x.curves.flatMap(x => x.length))
+        .concat([3])
     )!
 
     const subdivisions = controlPointsCount - 2
-    const curveLengths = range(keyframe[0].groups.length).map(i =>
-      range(keyframe[0].groups[i].curves.length).map(() => 0)
+    const curveLengths = range(this.keyframe.groups.length).map(i =>
+      range(this.keyframe.groups[i].curves.length).map(() => 0)
     )
 
-    keyframe.groups.forEach((group, groupIndex) => {
+    this.keyframe.groups.forEach((group, groupIndex) => {
       group.curves.forEach((curve, curveIndex) => {
         // interpolate the bezier curves which are too short
         if (curve.length < controlPointsCount) {
@@ -1285,10 +1286,10 @@ export class Built extends Builder {
       format: AnyPixelFormat
     ) => {
       const array = new Float32Array(
-        keyframe.groups.flatMap(group =>
+        this.keyframe.groups.flatMap(group =>
           group.curves.flatMap(curve => {
             return curve.flatMap(point => {
-              return getPoint(point, group, keyframe)
+              return getPoint(point, group, this.keyframe)
             })
           })
         )
@@ -1327,7 +1328,7 @@ export class Built extends Builder {
       thicknessTex,
       curveLengths,
       controlPointsCount,
-      keyframe: cloneDeep(keyframe)
+      keyframe: cloneDeep(this.keyframe)
     }
   }
 

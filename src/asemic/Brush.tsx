@@ -74,8 +74,13 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
     ...flicker
   }
 
-  const { controlPointCounts, keyframesTex, colorTex, thicknessTex } =
-    keyframes.packToTexture()
+  const {
+    controlPointCounts,
+    keyframesTex,
+    colorTex,
+    thicknessTex,
+    maxControlPoints
+  } = keyframes.packToTexture()
 
   const resolution = useThree(state =>
     state.gl.getDrawingBufferSize(targetVector)
@@ -101,19 +106,27 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
       defaultDraw={(self, frame, progress, ctx) => {
         if (typeof recalculate === 'function') progress = recalculate(progress)
         if (progress < lastProgress.current && recalculate) {
-          keyframes.reInitialize()
+          console.log('recalculating')
 
+          keyframes.reInitialize()
           const frameTransform = keyframes.keyframes[0].transform
 
           self.rotation.set(0, 0, frameTransform.rotate)
           self.scale.set(...frameTransform.scale.toArray(), 1)
           self.position.set(...frameTransform.translate.toArray(), 0)
 
+          const newTextures = keyframes.packToTexture()
           self.children.forEach((c, i) => {
             const child = c as THREE.InstancedMesh<
               THREE.PlaneGeometry,
               THREE.ShaderMaterial
             >
+
+            child.material.uniforms.keyframesTex.value =
+              newTextures.keyframesTex
+            child.material.uniforms.colorTex.value = newTextures.colorTex
+            child.material.uniforms.thicknessTex.value =
+              newTextures.thicknessTex
             child.material.uniforms.progress.value = progress
             child.material.uniformsNeedUpdate = true
             const { translate, scale, rotate } =
@@ -156,7 +169,8 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
                 defaults: { value: defaults },
                 progress: { value: 0 },
                 scale: { value: new Vector2(1, 1) },
-                controlPointCounts: { value: controlPointCounts }
+                controlPointCounts: { value: controlPointCounts },
+                maxControlPoints: { value: maxControlPoints }
               }}
               vertexShader={
                 /*glsl*/ `
@@ -185,6 +199,7 @@ uniform Jitter defaults;
 uniform float progress;
 uniform vec2 scale;
 uniform float controlPointCounts[${controlPointCounts.length}];
+uniform float maxControlPoints;
 
 out vec2 vUv;
 out vec4 vColor;
@@ -204,10 +219,9 @@ void main() {
   float pointProgress = pointInfo.x;
   float curveProgress = pointInfo.y;
   float controlPointsCount = controlPointCounts[
-    int(curveProgress) * controlPointCounts.length()];
+    int(curveProgress * float(controlPointCounts.length()))];
   vec2 pointCurveProgress = 
     multiBezierProgress(pointProgress, int(controlPointsCount));
-  
   vec2 points[3];
   float strength;
 
@@ -216,7 +230,7 @@ void main() {
       keyframesTex,
       vec2(
         (pointCurveProgress.x + pointI) 
-          / controlPointsCount,
+          / maxControlPoints,
         curveProgress));
     points[int(pointI)] = samp.xy;
     if (pointI == 1.) {
@@ -231,7 +245,6 @@ void main() {
   if (pointCurveProgress.x < controlPointsCount - 3.) {
     points[2] = mix(points[1], points[2], 0.5);
   }
-
   BezierPoint point = bezierPoint(pointCurveProgress.y, 
     points[0], points[1], points[2], strength, aspectRatio);
   
@@ -289,6 +302,7 @@ vec4 processColor (vec4 color, vec2 uv) {
 }
 void main() {
   gl_FragColor = processColor(vColor, vUv);
+  // gl_FragColor = processColor(vec4(v_test, 1,1,1), vUv);
 }`
               }
             />

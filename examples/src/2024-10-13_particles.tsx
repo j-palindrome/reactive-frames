@@ -9,9 +9,13 @@ export default function ParticlesTest() {
   // abcdefghijklmnopqrstuvwxyz
   // a poem in space
   const kf = new Builder(
-    g => g.text('wxyz', { width: 1, origin: [0, 0.5] })
-    // .newGroup({ scale: g.getRandomAlong([0, 0], [1, 1]) })
-    // .newCurve([0, 0], [1, 1])
+    g =>
+      g
+        .newGroup()
+        .newCurve([0, 0], [1, 1, { scale: g.getRandomAlong([0, 0], [1, 1]) }])
+        .debug()
+    // .newCurve()
+    // .newShape('circle', { reset: true, translate: g.getLastPoint(-1, -2) })
   )
 
   return (

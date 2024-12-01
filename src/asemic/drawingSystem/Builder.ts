@@ -176,7 +176,18 @@ export default class Builder {
     return coordinates.map(x => this.toPoint(x))
   }
 
-  protected toPoint(coordinate: Coordinate | PointBuilder) {
+  getLastPoint(index: number = -1, curve: number = -1, group: number = -1) {
+    if (group < 0) group += this.keyframes[0].groups.length
+    if (curve < 0) curve += this.keyframes[0].groups[group].curves.length
+
+    if (index < 0) {
+      index += this.keyframes[0].groups[group].curves[curve].length
+    }
+
+    return this.keyframes[0].groups[group].curves[curve][index]
+  }
+
+  toPoint(coordinate: Coordinate | PointBuilder) {
     if (coordinate instanceof PointBuilder) return coordinate
     if (coordinate[2]) {
       this.transform(coordinate[2])
@@ -260,7 +271,8 @@ export default class Builder {
     }
 
     this.reset(true)
-    const controlPointCounts: number[] = []
+    const totalCurves = sum(this.keyframes[0].groups.map(x => x.curves.length))
+    const controlPointCounts: Float32Array = new Float32Array(totalCurves)
     const groups: { transform: TransformData }[] = []
 
     const maxControlPoints = max(
@@ -268,13 +280,20 @@ export default class Builder {
         .flatMap(x => x.curves.flatMap(x => x.length))
         .concat([3])
     )!
+    let i = 0
     this.keyframes[0].groups.forEach((group, groupIndex) => {
       groups.push({ transform: this.keyframes[0].groups[groupIndex].transform })
       group.curves.forEach((curve, curveIndex) => {
         this.interpolateCurve(curve, maxControlPoints)
-        controlPointCounts.push(curve.length)
+        controlPointCounts[i] = curve.length
+        i++
       })
     })
+
+    const totalInstances = 0
+    const curveLengths = this.keyframes[0].groups.map(x =>
+      x.curves.map(x => this.makeCurvePath(x).getLength())
+    )
 
     const createTexture = (array: Float32Array, format: AnyPixelFormat) => {
       const tex = new DataTexture(
@@ -302,7 +321,6 @@ export default class Builder {
       ),
       RGBAFormat
     )
-
     const colorTex = createTexture(
       new Float32Array(
         this.keyframes[0].groups.flatMap(group =>
@@ -338,35 +356,35 @@ export default class Builder {
       thicknessTex,
       controlPointCounts,
       transform: this.keyframes[0].transform,
-      groups
+      groups,
+      maxControlPoints,
+      curveLengths
     }
   }
 
-  packToAttributes(resolution: [number, number], spacing, size = [1, 1]) {
-    let curveIndex = 0
-    const curveLengths = this.keyframes[0].groups.map(x =>
-      x.curves.map(x => this.makeCurvePath(x).getLength())
-    )
-    const totalCurves = sum(this.keyframes[0].groups.map(x => x.curves.length))
-    const pointProgress = curveLengths.map(group => {
-      const thisPointProgress = Float32Array.from(
-        group.flatMap(curveLength => {
-          const pointsInCurve =
-            (curveLength * resolution[0]) / (spacing ?? 1 * size[0])
-          const r = range(pointsInCurve).flatMap(vertexI => {
-            const pointProg = vertexI / (pointsInCurve - 1)
-            const curveProg = curveIndex / Math.max(1, totalCurves)
-            // sample from middle of pixels
-            return [pointProg, curveProg]
-          })
-          curveIndex++
-          return r
-        })
-      )
-      return thisPointProgress
-    })
-    return { pointProgress }
-  }
+  // packToAttributes(resolution: [number, number], spacing, size = [1, 1]) {
+  //   let curveIndex = 0
+
+  //   const totalCurves = sum(this.keyframes[0].groups.map(x => x.curves.length))
+  //   const pointProgress = curveLengths.map(group => {
+  //     const thisPointProgress = Float32Array.from(
+  //       group.flatMap(curveLength => {
+  //         const pointsInCurve =
+  //           (curveLength * resolution[0]) / (spacing ?? 1 * size[0])
+  //         const r = range(pointsInCurve).flatMap(vertexI => {
+  //           const pointProg = vertexI / (pointsInCurve - 1)
+  //           const curveProg = curveIndex / Math.max(1, totalCurves)
+  //           // sample from middle of pixels
+  //           return [pointProg, curveProg]
+  //         })
+  //         curveIndex++
+  //         return r
+  //       })
+  //     )
+  //     return thisPointProgress
+  //   })
+  //   return { pointProgress }
+  // }
 
   getTransformAt(
     transforms: TransformData[],

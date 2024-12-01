@@ -11,22 +11,24 @@ declare global {
     rotate: number
   }
 
-  type CoordinateTransform = {
+  type PreTransformData = {
     push?: true
     reset?: true | 'last' | 'pop'
-    translate?: [number, number]
-    scale?: [number, number] | number
+    translate?: [number, number] | PointBuilder
+    scale?: [number, number] | number | PointBuilder
     rotate?: number
-    origin?: [number, number]
-    remap?: [[number, number], [number, number]]
+    origin?: [number, number] | PointBuilder
+    remap?: [[number, number] | PointBuilder, [number, number] | PointBuilder]
   }
 
-  type CoordinateData = CoordinateTransform & {
+  type CoordinateSettings = {
     strength?: number
     thickness?: number
     color?: [number, number, number]
     alpha?: number
   }
+
+  type CoordinateData = PreTransformData & CoordinateSettings
 
   type GroupData = {
     curves: PointBuilder[][]

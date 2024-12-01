@@ -8,11 +8,9 @@ export class PointBuilder extends Vector2 {
   color?: [number, number, number]
   alpha?: number
   thickness?: number
-  parent: Builder
 
   constructor(
-    point: [number, number],
-    parent: Builder,
+    point: [number, number] = [0, 0],
     {
       strength = 0,
       color,
@@ -30,7 +28,6 @@ export class PointBuilder extends Vector2 {
     this.color = color
     this.alpha = alpha
     this.thickness = thickness
-    this.parent = parent
   }
 
   lerpRandom(point: Vector2) {
@@ -48,6 +45,6 @@ export class PointBuilder extends Vector2 {
   }
 
   override clone() {
-    return new PointBuilder([this.x, this.y], this.parent) as this
+    return new PointBuilder([this.x, this.y]) as this
   }
 }

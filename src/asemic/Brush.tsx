@@ -32,14 +32,9 @@ export type BrushSettings = {
   defaults?: Jitter
   jitter?: Jitter
   flicker?: Jitter
-  position?: VectorList
-  scale?: VectorList
-  rotation?: number
   fragmentShader?: string
-  vertexShader?: string
+  recalculate?: boolean | ((progress: number) => number)
   modifyPosition?: string
-  includes?: string
-  loop?: boolean
   keyframes: Builder
 }
 
@@ -51,7 +46,8 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
     flicker,
     fragmentShader = /*glsl*/ `return color;`,
     modifyPosition,
-    keyframes
+    keyframes,
+    recalculate = false
   } = props
   defaults = {
     size: [1, 1],
@@ -94,6 +90,7 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
   }, [resolution, controlPointCounts.length])
 
   const meshRef = useRef<THREE.Group>(null!)
+  const lastProgress = useRef(0)
 
   return (
     <ChildComponent
@@ -102,27 +99,33 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
         return meshRef.current
       }}
       defaultDraw={(self, frame, progress, ctx) => {
-        const frameTransform = keyframes.keyframes[0].transform
+        if (typeof recalculate === 'function') progress = recalculate(progress)
+        if (progress < lastProgress.current && recalculate) {
+          keyframes.reInitialize()
 
-        self.rotation.set(0, 0, frameTransform.rotate)
-        self.scale.set(...frameTransform.scale.toArray(), 1)
-        self.position.set(...frameTransform.translate.toArray(), 0)
+          const frameTransform = keyframes.keyframes[0].transform
 
-        self.children.forEach((c, i) => {
-          const child = c as THREE.InstancedMesh<
-            THREE.PlaneGeometry,
-            THREE.ShaderMaterial
-          >
-          child.material.uniforms.progress.value = progress
-          child.material.uniformsNeedUpdate = true
-          const { translate, scale, rotate } =
-            keyframes.keyframes[0].groups[i].transform
-          const scaleUniform: Vector2 = child.material.uniforms.scale.value
-          scaleUniform.set(1, 1).multiply(self.scale).multiply(scale)
-          child.position.set(translate.x, translate.y, 0)
-          child.scale.set(scale.x, scale.y, 1)
-          child.rotation.set(0, 0, rotate)
-        })
+          self.rotation.set(0, 0, frameTransform.rotate)
+          self.scale.set(...frameTransform.scale.toArray(), 1)
+          self.position.set(...frameTransform.translate.toArray(), 0)
+
+          self.children.forEach((c, i) => {
+            const child = c as THREE.InstancedMesh<
+              THREE.PlaneGeometry,
+              THREE.ShaderMaterial
+            >
+            child.material.uniforms.progress.value = progress
+            child.material.uniformsNeedUpdate = true
+            const { translate, scale, rotate } =
+              keyframes.keyframes[0].groups[i].transform
+            const scaleUniform: Vector2 = child.material.uniforms.scale.value
+            scaleUniform.set(1, 1).multiply(self.scale).multiply(scale)
+            child.position.set(translate.x, translate.y, 0)
+            child.scale.set(scale.x, scale.y, 1)
+            child.rotation.set(0, 0, rotate)
+          })
+        }
+        lastProgress.current = progress
       }}
       show={self => {
         self.visible = true
@@ -285,7 +288,7 @@ vec4 processColor (vec4 color, vec2 uv) {
   ${fragmentShader}
 }
 void main() {
-  gl_FragColor = processColor(vec4(v_test, 1, 1, 1), vUv);
+  gl_FragColor = processColor(vColor, vUv);
 }`
               }
             />

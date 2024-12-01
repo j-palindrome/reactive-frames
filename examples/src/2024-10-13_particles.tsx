@@ -8,10 +8,14 @@ import { QuadraticBezierCurve, Vector2 } from 'three'
 export default function ParticlesTest() {
   // abcdefghijklmnopqrstuvwxyz
   // a poem in space
-  const kf = new Builder(g => g.newGroup().newCurve([0, 0]))
+  const kf = new Builder(
+    g => g.text('q', { width: 0.5, origin: [0, 0.5] })
+    // .newGroup({ scale: g.getRandomAlong([0, 0], [1, 1]) })
+    // .newCurve([0, 0], [1, 1])
+  )
 
   return (
-    <Reactive progress={t => (t / 2) % 1}>
+    <Reactive progress={t => t % 1}>
       <Asemic name='a'>
         <Brush
           keyframes={kf}
@@ -20,6 +24,7 @@ export default function ParticlesTest() {
             a: 1,
             size: [1, 1]
           }}
+          recalculate
         />
       </Asemic>
     </Reactive>

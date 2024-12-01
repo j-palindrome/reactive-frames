@@ -77,19 +77,19 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
   const resolution = useThree(state =>
     state.gl.getDrawingBufferSize(targetVector)
   )
-  const [data, setData] = useState(keyframes.packToTexture(resolution))
+  const data = keyframes.reInitialize(resolution)
   const {
     keyframesTex,
     colorTex,
     thicknessTex,
     dimensions,
-
     groups,
     transform
   } = data
 
   const meshRef = useRef<THREE.Group>(null!)
   const lastProgress = useRef(0)
+  const maxCurveLength = resolution.length() * 2
 
   return (
     <ChildComponent
@@ -99,8 +99,39 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
       }}
       defaultDraw={(self, frame, progress, ctx) => {
         if (typeof recalculate === 'function') progress = recalculate(progress)
-        if (progress < lastProgress.current && recalculate) {
-          setData(keyframes.reInitialize().packToTexture(resolution))
+        // if (progress < lastProgress.current && recalculate) {
+        if (recalculate) {
+          const newData = keyframes.reInitialize(resolution)
+          self.rotation.set(0, 0, newData.transform.rotate)
+          self.scale.set(...newData.transform.scale.toArray(), 1)
+          self.position.set(...newData.transform.translate.toArray(), 0)
+
+          self.children.forEach((c, i) => {
+            const child = c as THREE.InstancedMesh<
+              THREE.PlaneGeometry,
+              THREE.ShaderMaterial
+            >
+            child.material.uniforms.keyframesTex.value = newData.keyframesTex
+            child.material.uniforms.colorTex.value = newData.colorTex
+            child.material.uniforms.thicknessTex.value = newData.thicknessTex
+            child.material.uniforms.progress.value = progress
+            child.material.uniforms.curveLengths.value =
+              newData.groups[i].curveLengths
+            child.material.uniforms.curveIndexes.value =
+              newData.groups[i].curveIndexes
+            child.material.uniforms.controlPointCounts.value =
+              newData.groups[i].controlPointCounts
+            child.material.uniformsNeedUpdate = true
+            child.count = groups[i].totalCurveLength
+
+            const { translate, scale, rotate } =
+              keyframes.keyframes[0].groups[i].transform
+            const scaleUniform: Vector2 = child.material.uniforms.scale.value
+            scaleUniform.set(1, 1).multiply(self.scale).multiply(scale)
+            child.position.set(translate.x, translate.y, 0)
+            child.scale.set(scale.x, scale.y, 1)
+            child.rotation.set(0, 0, rotate)
+          })
         }
         lastProgress.current = progress
       }}
@@ -120,8 +151,8 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
             position={[...group.transform.translate.toArray(), 0]}
             scale={[...group.transform.scale.toArray(), 1]}
             rotation={[0, 0, group.transform.rotate]}
-            key={i + now()}
-            args={[undefined, undefined, group.totalCurveLength]}>
+            key={i}
+            args={[undefined, undefined, maxCurveLength]}>
             <planeGeometry args={[defaults.size![0], defaults.size![1]]} />
             <shaderMaterial
               transparent
@@ -172,6 +203,7 @@ uniform int curveIndexes[${group.curveIndexes.length}];
 out vec2 vUv;
 out vec4 vColor;
 out float v_test;
+// flat out int vDiscard;
 
 ${rotate2d}
 ${hash}
@@ -182,6 +214,7 @@ vec2 modifyPosition(vec2 position) {
   ${modifyPosition ?? 'return position;'}
 }
 void main() {
+  
   vec2 aspectRatio = vec2(1, resolution.y / resolution.x);
   vec2 pixel = vec2(1. / resolution.x, 1. / resolution.y);
 
@@ -190,6 +223,10 @@ void main() {
   int lastLength = 0;
   int curveIndex = 0;
   while (id > totalLength) {
+    // if (curveIndex > curveLengths.length()) {
+    //   vDiscard = 1;
+    //   return;
+    // }
     curveIndex++;
     lastLength = totalLength;
     totalLength += curveLengths[curveIndex];
@@ -274,11 +311,13 @@ uniform vec2 resolution;
 in vec2 vUv;
 in vec4 vColor;
 in float v_test;
+// flat in int vDiscard;
 
 vec4 processColor (vec4 color, vec2 uv) {
   ${fragmentShader}
 }
 void main() {
+  // if (vDiscard == 1) discard;
   gl_FragColor = processColor(vColor, vUv);
   // gl_FragColor = processColor(vec4(v_test, 1,1,1), vUv);
 }`

@@ -261,7 +261,7 @@ export default class Builder {
     return this
   }
 
-  packToTexture(resolution: Vector2) {
+  protected packToTexture(resolution: Vector2) {
     const hypotenuse = resolution.length()
     const defaults: Required<Jitter> = {
       hsl: [1, 1, 1],
@@ -1314,16 +1314,15 @@ ${g.curves
     return this
   }
 
-  reInitialize() {
+  reInitialize(resolution: Vector2) {
     this.reset(true)
     this.target([0, 0], [0, 0])
     this.keyframes = [this.defaultKeyframe()]
     this.initialize(this)
-    return this
+    return this.packToTexture(resolution)
   }
 
   constructor(initialize: (builder: Builder) => Builder) {
     this.initialize = initialize
-    this.reInitialize()
   }
 }

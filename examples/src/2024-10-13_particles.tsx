@@ -9,16 +9,25 @@ export default function ParticlesTest() {
   // abcdefghijklmnopqrstuvwxyz
   // a poem in space
   const kf = new Builder(g =>
-    g.newGroup().eval(() => {
-      g.newCurve(
-        g.getRandomAlong([0, 0], [1, 0]),
-        g.getRandomAlong([0, 1], [1, 1])
+    g.eval(() => {
+      g.newGroup().eval(
+        () =>
+          g
+            .newCurve(
+              g.getRandomAlong(
+                [0, 0, { scale: 0.6, translate: [0.2, 0.2] }],
+                [1, 0]
+              ),
+              g.getRandomAlong([0, 1], [1, 1])
+            )
+            .reset(),
+        100
       )
-    }, 1000)
+    }, 10)
   )
 
   return (
-    <Reactive progress={t => t % 1}>
+    <Reactive progress={t => (t * 20) % 1}>
       <Asemic name='a'>
         <Brush
           keyframes={kf}

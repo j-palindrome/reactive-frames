@@ -82,44 +82,19 @@ export default function Brush(
 
   const [keyframeData, setKeyframeData] = useState(keyframes.packToTexture())
 
-  const {
-    curveLengths,
-    controlPointsCount = 3,
-    keyframesTex,
-    colorTex,
-    thicknessTex
-  } = keyframeData
+  const { controlPointCounts, keyframesTex, colorTex, thicknessTex } =
+    keyframeData
 
   const resolution = useThree(state =>
     state.gl.getDrawingBufferSize(targetVector)
   )
 
-  const curveCount = curveLengths.flat().length
+  const curveCount = controlPointCounts.length
 
-  const { pointProgress } = useMemo(() => {
-    let curveIndex = 0
-    const pointProgress = curveLengths.map(group => {
-      const thisPointProgress = Float32Array.from(
-        group.flatMap(curveLength => {
-          const pointsInCurve =
-            (curveLength * resolution.x) / (spacing * defaults.size![0])
-          const r = range(pointsInCurve).flatMap(vertexI => {
-            const pointProg = vertexI / (pointsInCurve - 1)
-            const curveProg = curveIndex / Math.max(1, curveCount - 1)
-            // sample from middle of pixels
-            return [
-              pointProg,
-              curveProg * (1 - 1 / curveCount) + 0.5 / curveCount
-            ]
-          })
-          curveIndex++
-          return r
-        })
-      )
-      return thisPointProgress
-    })
-    return { pointProgress }
-  }, [resolution, curveCount])
+  const { pointProgress } = useMemo(
+    () => keyframes.packToAttributes([window.innerWidth, window.innerHeight]),
+    [resolution, curveCount]
+  )
   const meshRef = useRef<THREE.Group>(null!)
   const lastProgress = useRef(0)
 

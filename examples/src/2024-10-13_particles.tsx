@@ -13,7 +13,6 @@ export default function ParticlesTest() {
       g
         .newGroup()
         .newCurve([0, 0], [1, 1, { scale: g.getRandomAlong([0, 0], [1, 1]) }])
-        .debug()
     // .newCurve()
     // .newShape('circle', { reset: true, translate: g.getLastPoint(-1, -2) })
   )

@@ -141,12 +141,7 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
           <instancedMesh
             key={i}
             args={[undefined, undefined, group.pointProgress.length / 2]}>
-            <planeGeometry args={[defaults.size![0], defaults.size![1]]}>
-              <instancedBufferAttribute
-                attach='attributes-pointInfo'
-                args={[group.pointProgress, 2]}
-              />
-            </planeGeometry>
+            <planeGeometry args={[defaults.size![0], defaults.size![1]]} />
             <shaderMaterial
               transparent
               uniforms={{
@@ -177,8 +172,6 @@ struct KeyframeInfo {
   float strength;
 };
 
-in vec2 pointInfo;
-
 uniform sampler2D keyframesTex;
 uniform sampler2D thicknessTex;
 uniform sampler2D colorTex;
@@ -206,8 +199,8 @@ vec2 modifyPosition(vec2 position) {
 void main() {
   vec2 aspectRatio = vec2(1, resolution.y / resolution.x);
   vec2 pixel = vec2(1. / resolution.x, 1. / resolution.y);
-  float pointProgress = pointInfo.x;
-  float curveProgress = pointInfo.y;
+  float pointProgress = 0.;
+  float curveProgress = 0.;
   float controlPointsCount = controlPointCounts[
     int(curveProgress * float(controlPointCounts.length()))];
   vec2 pointCurveProgress = 

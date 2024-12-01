@@ -582,6 +582,9 @@ export default class Builder {
   getRandomAlong(...curve: Coordinate[]) {
     const curvePoints = curve.map(x => this.toPoint(x))
     const curvePath = this.makeCurvePath(curvePoints)
+    if (curve.length === 2) {
+      return this.toPoint(curve[0]).lerp(this.toPoint(curve[1]), Math.random())
+    }
     return new PointBuilder([0, 0]).copy(curvePath.getPointAt(Math.random()))
   }
 

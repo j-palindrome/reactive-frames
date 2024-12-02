@@ -9,7 +9,7 @@ export default function ParticlesTest() {
   // abcdefghijklmnopqrstuvwxyz
   // a poem in space
   const kf = new Builder(g =>
-    g.text('testing').setWarp({ translate: [0, 0.5] })
+    g.text('e').setWarp({ translate: [0, 0.5], scale: 0.5 })
   )
 
   return (

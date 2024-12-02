@@ -11,6 +11,7 @@ import {
   RedFormat,
   RepeatWrapping,
   RGBAFormat,
+  RGBFormat,
   Vector2
 } from 'three'
 import { PointBuilder } from './PointBuilder'
@@ -37,9 +38,7 @@ const SHAPES: Record<string, Coordinate[]> = {
 }
 
 const v1 = new Vector2(),
-  v2 = new Vector2(),
-  v3 = new Vector2()
-const curveCache = new QuadraticBezierCurve()
+  v2 = new Vector2()
 
 type TargetInfo = [number, number] | number
 export default class Builder {
@@ -257,26 +256,31 @@ export default class Builder {
     let i = 0
     let curveIndex = 0
     const groups = this.keyframe.groups.map((group, groupIndex) => {
-      const curveLengths = new Int16Array(group.curves.length)
-      const curveIndexes = new Int16Array(group.curves.length)
-      const controlPointCounts = new Int8Array(group.curves.length)
+      const curveEnds = new Float32Array(group.curves.length)
+      const curveIndexes = new Float32Array(group.curves.length)
+      const controlPointCounts = new Float32Array(group.curves.length)
       let totalCurveLength = 0
       group.curves.forEach((curve, i) => {
+        if (curve.length < dimensions.x) {
+          this.interpolateCurve(curve, dimensions.x)
+        }
         // shortcut for Bezier lengths
         let curveLength = 0
         for (let i = 1; i < curve.length; i++) {
           curveLength += curve[i - 1].distanceTo(curve[i])
         }
-        curveLength *= hypotenuse
+
+        curveLength *=
+          (hypotenuse / 1.414) * (group.transform.scale.length() / 1.414)
         totalCurveLength += curveLength
-        curveLengths[i] = curveLength
+        curveEnds[i] = totalCurveLength
         curveIndexes[i] = curveIndex
         controlPointCounts[i] = curve.length
         curveIndex++
       })
       return {
         transform: this.keyframe.groups[groupIndex].transform,
-        curveLengths,
+        curveEnds,
         curveIndexes,
         controlPointCounts,
         totalCurveLength

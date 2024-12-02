@@ -30,11 +30,9 @@ export type Jitter = {
 export type BrushSettings = {
   spacing?: number
   defaults?: Jitter
-  jitter?: Jitter
-  flicker?: Jitter
-  fragmentShader?: string
   recalculate?: boolean | ((progress: number) => number)
   modifyPosition?: string
+  modifyColor?: string
   keyframes: Builder
 }
 
@@ -42,10 +40,8 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
   let {
     spacing = 1,
     defaults,
-    jitter,
-    flicker,
-    fragmentShader = /*glsl*/ `return color;`,
     modifyPosition,
+    modifyColor = `return color;`,
     keyframes,
     recalculate = false
   } = props
@@ -56,22 +52,6 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
     position: [0, 0],
     rotation: 0,
     ...defaults
-  }
-  jitter = {
-    size: [0, 0],
-    position: [0, 0],
-    hsl: [0, 0, 0],
-    a: 0,
-    rotation: 0,
-    ...jitter
-  }
-  flicker = {
-    size: [0, 0],
-    position: [0, 0],
-    hsl: [0, 0, 0],
-    a: 0,
-    rotation: 0,
-    ...flicker
   }
 
   const resolution = useThree(state =>
@@ -89,9 +69,7 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
 
   const meshRef = useRef<THREE.Group>(null!)
   const lastProgress = useRef(0)
-  const maxCurveLength = resolution.length() * 2
-
-  console.log(dimensions, groups[0].controlPointCounts, groups[0].curveEnds)
+  const maxCurveLength = resolution.length()
 
   return (
     <ChildComponent
@@ -129,8 +107,7 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
             child.count = groups[i].totalCurveLength
 
             const { translate, scale, rotate } = data.groups[i].transform
-            const scaleUniform: Vector2 = child.material.uniforms.scale.value
-            scaleUniform.set(1, 1).multiply(self.scale).multiply(scale)
+            child.material.uniforms.scaleCorrection.value = scale
             child.position.set(translate.x, translate.y, 0)
             child.scale.set(scale.x, scale.y, 1)
             child.rotation.set(0, 0, rotate)
@@ -164,70 +141,45 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
                 colorTex: { value: colorTex },
                 thicknessTex: { value: thicknessTex },
                 keyframesTex: { value: keyframesTex },
-                jitter: { value: jitter },
-                flicker: { value: flicker },
                 resolution: { value: resolution },
-                defaults: { value: defaults },
                 progress: { value: 0 },
-                scale: { value: new Vector2(1, 1) },
                 dimensions: { value: dimensions },
                 curveEnds: { value: group.curveEnds },
                 curveIndexes: { value: group.curveIndexes },
-                controlPointCounts: { value: group.controlPointCounts }
+                controlPointCounts: { value: group.controlPointCounts },
+                scaleCorrection: { value: group.transform.scale }
               }}
               vertexShader={
                 /*glsl*/ `
-struct Jitter {
-  vec2 size;
-  vec2 position;
-  vec3 hsl;
-  float a;
-  float rotation;
-};
-struct KeyframeInfo {
-  float duration;
-  float start;
-  float strength;
-};
-
-in float index;
-
-uniform sampler2D keyframesTex;
-uniform sampler2D thicknessTex;
-uniform sampler2D colorTex;
-uniform vec2 resolution;
-uniform Jitter jitter;
-uniform Jitter flicker;
-uniform Jitter defaults;
-uniform float progress;
-uniform vec2 scale;
-uniform vec2 dimensions;
-uniform int controlPointCounts[${group.controlPointCounts.length}];
 uniform int curveEnds[${group.curveEnds.length}];
+uniform int controlPointCounts[${group.controlPointCounts.length}];
 uniform int curveIndexes[${group.curveIndexes.length}];
+uniform sampler2D keyframesTex;
+uniform vec2 dimensions;
+uniform vec2 resolution;
+uniform vec2 scaleCorrection;
 
 out vec2 vUv;
 out vec4 vColor;
 out float v_test;
-// flat out int vDiscard;
 
-${rotate2d}
-${hash}
-${multiBezierProgress}
 ${bezierPoint}
-
+${multiBezierProgress}
+${rotate2d}
 vec2 modifyPosition(vec2 position) {
-  ${modifyPosition ?? 'return position;'}
+  ${'return position;'}
 }
 
 void main() {
-  
   vec2 aspectRatio = vec2(1, resolution.y / resolution.x);
   vec2 pixel = vec2(1. / resolution.x, 1. / resolution.y);
 
   int id = gl_InstanceID;
   int curveIndex = 0;
   while (id > curveEnds[curveIndex]) {
+    if (curveIndex >= curveEnds.length()) {
+      break;
+    }
     curveIndex ++;
   }
 
@@ -241,6 +193,7 @@ void main() {
   } else {
     pointProgress = float(id) / float(curveEnds[curveIndex]);
   }
+  if (pointProgress < 0.5) v_test = 1.;
 
   BezierPoint point;
   if (controlPointsCount == 2) {
@@ -248,10 +201,10 @@ void main() {
     vec2 p1 = texture(keyframesTex, vec2(
       1. / dimensions.x, curveProgress)).xy;
     vec2 progressPoint = mix(p0, p1, pointProgress);
+    // vec2 progressPoint = mix(vec2(0.5, 0.25), vec2(0.5, 0.75), pointProgress);
     point = BezierPoint(progressPoint,
       atan(progressPoint.y, progressPoint.x));
   } else {
-    // 6
     vec2 pointCurveProgress = 
       multiBezierProgress(pointProgress, controlPointsCount);
     vec2 points[3];
@@ -278,47 +231,19 @@ void main() {
       points[2] = mix(points[1], points[2], 0.5);
     }
     point = bezierPoint(pointCurveProgress.y, 
-      points[0], points[1], points[2], strength, aspectRatio);
+      points[0], points[1], points[2], strength, vec2(1, 1));
   }
-  
-  vColor = texture(
-    colorTex, 
-    vec2(pointProgress, curveProgress));
-  vColor.a *= 1. 
-    - flicker.a
-    + hash(1., .385 + progress) * flicker.a;
-  float thisThickness = texture(
-    thicknessTex, 
-    vec2(pointProgress, curveProgress)).x;
-
-  vec2 jitterPosition = jitter.position
-    * (vec2(hash(point.position.x, .184 + progress), 
-      hash(point.position.y, .182 + progress)) - 0.5);
-  vec2 flickerPosition = flicker.position
-    * vec2(hash(1., .396 + progress), 
-      hash(1., .281 + progress));
-  vec2 jitterSize = 1. + jitter.size / defaults.size
-    * hash(point.position.x + point.position.y, 
-      .923 + progress);
-  float jitterA = vColor.a 
-    * (1. - (
-      hash(point.position.x + point.position.y, .294 + progress) 
-      * jitter.a));
-  float jitterRotation = jitter.rotation
-    * hash(point.position.x + point.position.y, .429 + progress)
-    - (jitter.rotation / 2.);
 
   gl_Position = 
     projectionMatrix 
     * modelViewMatrix 
     * vec4(modifyPosition(
       point.position 
-      + jitterPosition 
-      + flickerPosition
       + rotate2d(
-        position.xy * jitterSize * thisThickness * pixel, 
-        point.rotation + 1.5707 + jitterRotation) 
-        / aspectRatio / scale),
+        position.xy * pixel, 
+        point.rotation + 1.5707) 
+        / aspectRatio 
+        / scaleCorrection),
       0, 1);
 }
 `
@@ -332,7 +257,7 @@ in float v_test;
 // flat in int vDiscard;
 
 vec4 processColor (vec4 color, vec2 uv) {
-  ${fragmentShader}
+  ${modifyColor}
 }
 void main() {
   // if (vDiscard == 1) discard;

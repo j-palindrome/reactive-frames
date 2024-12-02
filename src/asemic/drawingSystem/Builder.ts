@@ -1,5 +1,6 @@
 import {
   AnyPixelFormat,
+  ClampToEdgeWrapping,
   Curve,
   CurvePath,
   Data3DTexture,
@@ -75,34 +76,21 @@ export default class Builder {
     }
   }
 
-  getPoint(
-    index: number = -1,
-    curve: number = -1,
-    group: number = -1,
-    frame: number = -1
-  ) {
-    if (group < 0) group += this.keyframe[frame].groups.length
-    if (curve < 0) curve += this.keyframe[frame].groups[group].curves.length
+  getPoint(index: number = -1, curve: number = -1, group: number = -1) {
+    if (group < 0) group += this.keyframe.groups.length
+    if (curve < 0) curve += this.keyframe.groups[group].curves.length
 
-    if (index < 0)
-      index += this.keyframe[frame].groups[group].curves[curve].length
-    return this.fromPoint(
-      this.keyframe[frame].groups[group].curves[curve][index]
-    )
+    if (index < 0) index += this.keyframe.groups[group].curves[curve].length
+    return this.fromPoint(this.keyframe.groups[group].curves[curve][index])
   }
 
-  getIntersect(
-    progress: number,
-    curve: number = -1,
-    group: number = -1,
-    frame: number = -1
-  ) {
-    if (group < 0) group += this.keyframe[frame].groups.length
-    if (curve < 0) curve += this.keyframe[frame].groups[group].curves.length
+  getIntersect(progress: number, curve: number = -1, group: number = -1) {
+    if (group < 0) group += this.keyframe.groups.length
+    if (curve < 0) curve += this.keyframe.groups[group].curves.length
     if (progress < 0) progress += 1
 
     const curvePath = this.makeCurvePath(
-      this.keyframe[frame].groups[group].curves[curve]
+      this.keyframe.groups[group].curves[curve]
     )
     return this.fromPoint(curvePath.getPointAt(progress))
   }
@@ -261,9 +249,9 @@ export default class Builder {
       const controlPointCounts = new Float32Array(group.curves.length)
       let totalCurveLength = 0
       group.curves.forEach((curve, i) => {
-        if (curve.length < dimensions.x) {
-          this.interpolateCurve(curve, dimensions.x)
-        }
+        // if (curve.length < dimensions.x) {
+        //   this.interpolateCurve(curve, dimensions.x)
+        // }
         // shortcut for Bezier lengths
         let curveLength = 0
         for (let i = 1; i < curve.length; i++) {
@@ -292,7 +280,7 @@ export default class Builder {
       tex.format = format
       tex.type = FloatType
       tex.minFilter = tex.magFilter = NearestFilter
-      tex.wrapS = tex.wrapT = RepeatWrapping
+      tex.wrapS = tex.wrapT = ClampToEdgeWrapping
       tex.needsUpdate = true
       return tex
     }

@@ -728,10 +728,7 @@ ${g.curves
     return this.letters[type]()
   }
 
-  text(
-    str: string,
-    { width = 1, origin = [0, 0] }: { width?: number; origin?: Coordinate } = {}
-  ) {
+  text(str: string) {
     let lineCount = 0
     for (let letter of str) {
       if (this.letters[letter]) {
@@ -754,9 +751,8 @@ ${g.curves
     this.reset(true)
     this.groups(
       group => {
-        group.transform.translate.multiplyScalar(width / maxX)
-        group.transform.scale.multiplyScalar(width / maxX)
-        group.transform.translate.add(this.toPoint(origin))
+        group.transform.translate.multiplyScalar(1 / maxX)
+        group.transform.scale.multiplyScalar(1 / maxX)
       },
       [0, -1]
     )
@@ -1040,6 +1036,7 @@ ${g.curves
   setWarp(frame: PreTransformData & CoordinateSettings, target?: TargetInfo) {
     this.target(target)
     this.combineTransforms(this.keyframe.transform, this.toTransform(frame))
+    return this
   }
 
   setWarpGroups(

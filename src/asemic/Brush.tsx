@@ -99,8 +99,7 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
       }}
       defaultDraw={(self, frame, progress, ctx) => {
         if (typeof recalculate === 'function') progress = recalculate(progress)
-        // if (progress < lastProgress.current && recalculate) {
-        if (recalculate) {
+        if (progress < lastProgress.current && recalculate) {
           const newData = keyframes.reInitialize(resolution)
           self.rotation.set(0, 0, newData.transform.rotate)
           self.scale.set(...newData.transform.scale.toArray(), 1)

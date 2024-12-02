@@ -281,9 +281,7 @@ export default class Builder {
     }[] = []
 
     const width = max(
-      this.keyframes[0].groups
-        .flatMap(x => x.curves.flatMap(x => x.length))
-        .concat([3])
+      this.keyframes[0].groups.flatMap(x => x.curves.flatMap(x => x.length))
     )!
     const height = sum(this.keyframes[0].groups.map(x => x.curves.length))
     const dimensions = new Vector2(width, height)
@@ -295,7 +293,9 @@ export default class Builder {
       const controlPointCounts = new Int8Array(group.curves.length)
       let totalCurveLength = 0
       group.curves.forEach((curve, i) => {
-        this.interpolateCurve(curve, width)
+        if (curve.length < width) {
+          this.interpolateCurve(curve, width)
+        }
         const curveLength =
           this.makeCurvePath(
             curve.map(x => this.applyTransform(x.clone(), group.transform))

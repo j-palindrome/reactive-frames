@@ -235,33 +235,44 @@ void main() {
   float curveProgress = float(curveIndexes[curveIndex]) / dimensions.y;
   int controlPointsCount = controlPointCounts[curveIndex];
   
-  vec2 pointCurveProgress = 
+  BezierPoint point;
+  if (controlPointsCount == 2) {
+    vec2 p0 = texture(keyframesTex, vec2(0, curveProgress)).xy;
+    vec2 p1 = texture(keyframesTex, vec2(
+      1. / dimensions.x, curveProgress)).xy;
+    vec2 progressPoint = mix(p0, p1, pointProgress);
+    point = BezierPoint(progressPoint,
+      atan(progressPoint.y, progressPoint.x));
+  } else {
+    vec2 pointCurveProgress = 
     multiBezierProgress(pointProgress, controlPointsCount);
-  vec2 points[3];
-  float strength;
-
-  for (float pointI = 0.; pointI < 3.; pointI ++) {
-    vec4 samp = texture(
-      keyframesTex,
-      vec2(
-        (pointCurveProgress.x + pointI) 
-          / dimensions.x,
-        curveProgress));
-    points[int(pointI)] = samp.xy;
-    if (pointI == 1.) {
-      strength = samp.z;
+    vec2 points[3];
+    float strength;
+    
+    for (float pointI = 0.; pointI < 3.; pointI ++) {
+      vec4 samp = texture(
+        keyframesTex,
+        vec2(
+          (pointCurveProgress.x + pointI) 
+            / dimensions.x,
+          curveProgress));
+      points[int(pointI)] = samp.xy;
+      if (pointI == 1.) {
+        strength = samp.z;
+      }
     }
-  }
 
-  // adjust to interpolate between things
-  if (pointCurveProgress.x > 0.) {
-    points[0] = mix(points[0], points[1], 0.5);
+    // adjust to interpolate between things
+    if (pointCurveProgress.x > 0.) {
+      points[0] = mix(points[0], points[1], 0.5);
+    }
+    if (pointCurveProgress.x < float(controlPointsCount) - 3.) {
+      points[2] = mix(points[1], points[2], 0.5);
+    }
+    point = bezierPoint(pointCurveProgress.y, 
+      points[0], points[1], points[2], strength, aspectRatio);
   }
-  if (pointCurveProgress.x < float(controlPointsCount) - 3.) {
-    points[2] = mix(points[1], points[2], 0.5);
-  }
-  BezierPoint point = bezierPoint(pointCurveProgress.y, 
-    points[0], points[1], points[2], strength, aspectRatio);
+  
   
   vColor = texture(
     colorTex, 

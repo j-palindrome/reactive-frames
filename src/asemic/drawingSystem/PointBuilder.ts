@@ -15,7 +15,7 @@ export class PointBuilder extends Vector2 {
       strength = 0,
       color,
       alpha,
-      thickness
+      thickness = 1
     }: {
       strength?: number
       color?: [number, number, number]

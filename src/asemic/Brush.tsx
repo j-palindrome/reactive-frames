@@ -155,6 +155,8 @@ uniform int curveEnds[${group.curveEnds.length}];
 uniform int controlPointCounts[${group.controlPointCounts.length}];
 uniform int curveIndexes[${group.curveIndexes.length}];
 uniform sampler2D keyframesTex;
+uniform sampler2D colorTex;
+uniform sampler2D thicknessTex;
 uniform vec2 dimensions;
 uniform vec2 resolution;
 uniform vec2 scaleCorrection;
@@ -196,31 +198,44 @@ void main() {
   if (pointProgress < 0.5) v_test = 1.;
 
   BezierPoint point;
+  float thickness;
+  vec4 color;
   if (controlPointsCount == 2) {
     vec2 p0 = texture(keyframesTex, vec2(0, curveProgress)).xy;
     vec2 p1 = texture(keyframesTex, vec2(
       1. / dimensions.x, curveProgress)).xy;
     vec2 progressPoint = mix(p0, p1, pointProgress);
-    // vec2 progressPoint = mix(vec2(0.5, 0.25), vec2(0.5, 0.75), pointProgress);
     point = BezierPoint(progressPoint,
       atan(progressPoint.y, progressPoint.x));
+    float t0 = texture(thicknessTex, vec2(0, curveProgress)).x;
+    float t1 = texture(thicknessTex, vec2(
+      1. / dimensions.x, curveProgress)).x;
+    thickness = mix(t0, t1, pointProgress);
+    vec4 c0 = texture(colorTex, vec2(0, curveProgress));
+    vec4 c1 = texture(colorTex, vec2(
+      1. / dimensions.x, curveProgress));
+    color = mix(c0, c1, pointProgress);
   } else {
     vec2 pointCurveProgress = 
       multiBezierProgress(pointProgress, controlPointsCount);
     vec2 points[3];
+    vec4 colors[3];
+    float thicknesses[3];
+
     float strength;
     
     for (int pointI = 0; pointI < 3; pointI ++) {
-      vec4 samp = texture(
-        keyframesTex,
-        vec2(
-          (pointCurveProgress.x + float(pointI)) 
-            / dimensions.x,
-          curveProgress));
-      points[pointI] = samp.xy;
+      vec2 textureVec = vec2(
+        (pointCurveProgress.x + float(pointI)) 
+          / dimensions.x,
+        curveProgress);
+      vec4 samp = texture(keyframesTex, textureVec);
       if (pointI == 1) {
         strength = samp.z;
+        thickness = texture(thicknessTex, textureVec).x;
       }
+      points[pointI] = samp.xy;
+      colors[pointI] = texture(colorTex, textureVec);
     }
 
     // adjust to interpolate between things
@@ -232,7 +247,11 @@ void main() {
     }
     point = bezierPoint(pointCurveProgress.y, 
       points[0], points[1], points[2], strength, vec2(1, 1));
+    color = polyLine(pointCurveProgress.y, 
+      colors[0], colors[1], colors[2]);
   }
+
+  vColor = color;
 
   gl_Position = 
     projectionMatrix 
@@ -240,7 +259,8 @@ void main() {
     * vec4(modifyPosition(
       point.position 
       + rotate2d(
-        position.xy * pixel, 
+        position.xy * pixel
+        * vec2(thickness, 1), 
         point.rotation + 1.5707) 
         / aspectRatio 
         / scaleCorrection),
@@ -261,8 +281,8 @@ vec4 processColor (vec4 color, vec2 uv) {
 }
 void main() {
   // if (vDiscard == 1) discard;
-  // gl_FragColor = processColor(vColor, vUv);
-  gl_FragColor = processColor(vec4(v_test, 1,1,1), vUv);
+  gl_FragColor = processColor(vColor, vUv);
+  // gl_FragColor = processColor(vec4(v_test, 1,1,1), vUv);
 }`
               }
             />

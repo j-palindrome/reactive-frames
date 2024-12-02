@@ -223,10 +223,6 @@ void main() {
   int lastLength = 0;
   int curveIndex = 0;
   while (id > totalLength) {
-    // if (curveIndex > curveLengths.length()) {
-    //   vDiscard = 1;
-    //   return;
-    // }
     curveIndex++;
     lastLength = totalLength;
     totalLength += curveLengths[curveIndex];

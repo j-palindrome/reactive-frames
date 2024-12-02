@@ -272,13 +272,6 @@ export default class Builder {
     }
 
     this.reset(true)
-    const groups: {
-      transform: TransformData
-      totalCurveLength: number
-      curveLengths: Int16Array
-      curveIndexes: Int16Array
-      controlPointCounts: Int8Array
-    }[] = []
 
     const width = max(
       this.keyframes[0].groups.flatMap(x => x.curves.flatMap(x => x.length))
@@ -287,32 +280,31 @@ export default class Builder {
     const dimensions = new Vector2(width, height)
     let i = 0
     let curveIndex = 0
-    this.keyframes[0].groups.forEach((group, groupIndex) => {
+    const groups = this.keyframes[0].groups.map((group, groupIndex) => {
       const curveLengths = new Int16Array(group.curves.length)
       const curveIndexes = new Int16Array(group.curves.length)
       const controlPointCounts = new Int8Array(group.curves.length)
       let totalCurveLength = 0
       group.curves.forEach((curve, i) => {
-        if (curve.length < width) {
-          this.interpolateCurve(curve, width)
+        // shortcut for Bezier lengths
+        let curveLength = 0
+        for (let i = 1; i < curve.length; i++) {
+          curveLength += curve[i - 1].distanceTo(curve[i])
         }
-        const curveLength =
-          this.makeCurvePath(
-            curve.map(x => this.applyTransform(x.clone(), group.transform))
-          ).getLength() * hypotenuse
+        curveLength *= hypotenuse
         totalCurveLength += curveLength
         curveLengths[i] = curveLength
         curveIndexes[i] = curveIndex
         controlPointCounts[i] = curve.length
         curveIndex++
       })
-      groups.push({
+      return {
         transform: this.keyframes[0].groups[groupIndex].transform,
         curveLengths,
         curveIndexes,
         controlPointCounts,
         totalCurveLength
-      })
+      }
     })
 
     const createTexture = (array: Float32Array, format: AnyPixelFormat) => {
@@ -774,9 +766,8 @@ ${g.curves
   }
 
   protected lastCurve(callback: (curve: PointBuilder[]) => void) {
-    return this.groups(group => {
-      callback(group.curves[group.curves.length - 1])
-    })
+    const lastGroup = last(this.keyframes[0].groups)!
+    callback(last(lastGroup.curves)!)
   }
 
   /**

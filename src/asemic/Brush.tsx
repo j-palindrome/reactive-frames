@@ -124,8 +124,7 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
             child.material.uniformsNeedUpdate = true
             child.count = groups[i].totalCurveLength
 
-            const { translate, scale, rotate } =
-              keyframes.keyframes[0].groups[i].transform
+            const { translate, scale, rotate } = data.groups[i].transform
             const scaleUniform: Vector2 = child.material.uniforms.scale.value
             scaleUniform.set(1, 1).multiply(self.scale).multiply(scale)
             child.position.set(translate.x, translate.y, 0)

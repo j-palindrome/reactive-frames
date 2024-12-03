@@ -1,6 +1,14 @@
 import { useFrame, useThree } from '@react-three/fiber'
-import { now, range, sumBy } from 'lodash'
-import { Ref, RefObject, useMemo, useRef, useState } from 'react'
+import { isEqual, now, range, sumBy } from 'lodash'
+import {
+  Ref,
+  RefObject,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState
+} from 'react'
 import * as THREE from 'three'
 import { Vector2 } from 'three'
 import {
@@ -15,6 +23,7 @@ import { ChildProps } from '../types'
 import FeedbackTexture, { FeedbackTextureRef } from './FeedbackTexture'
 import { Mesh } from '../frames/CanvasGL'
 import Builder from './drawingSystem/Builder'
+import { useEventListener } from '../utilities/react'
 
 const targetVector = new THREE.Vector2()
 
@@ -54,10 +63,21 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
     ...defaults
   }
 
-  const resolution = useThree(state =>
-    state.gl.getDrawingBufferSize(targetVector)
+  useEventListener(
+    'resize',
+    () => {
+      console.log('reinit')
+
+      reInitialize()
+    },
+    []
   )
-  const data = keyframes.reInitialize(resolution)
+  const resolution = new Vector2(
+    window.innerWidth * window.devicePixelRatio,
+    window.innerHeight * window.devicePixelRatio
+  )
+
+  const [lastData, setLastData] = useState(keyframes.reInitialize(resolution))
   const {
     keyframesTex,
     colorTex,
@@ -65,11 +85,57 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
     groups,
     transform,
     dimensions
-  } = data
-
+  } = lastData
   const meshRef = useRef<THREE.Group>(null!)
   const lastProgress = useRef(0)
-  const maxCurveLength = resolution.length()
+  const maxCurveLength = resolution.length() * 2
+
+  const updateChildren = (newData: typeof lastData) => {
+    meshRef.current.rotation.set(0, 0, newData.transform.rotate)
+    meshRef.current.scale.set(...newData.transform.scale.toArray(), 1)
+    meshRef.current.position.set(...newData.transform.translate.toArray(), 0)
+
+    meshRef.current.children.forEach((c, i) => {
+      const child = c as THREE.InstancedMesh<
+        THREE.PlaneGeometry,
+        THREE.ShaderMaterial
+      >
+      child.material.uniforms.keyframesTex.value = newData.keyframesTex
+      child.material.uniforms.colorTex.value = newData.colorTex
+      child.material.uniforms.thicknessTex.value = newData.thicknessTex
+      child.material.uniforms.curveEnds.value = newData.groups[i].curveEnds
+      child.material.uniforms.curveIndexes.value =
+        newData.groups[i].curveIndexes
+      child.material.uniforms.controlPointCounts.value =
+        newData.groups[i].controlPointCounts
+      child.material.uniforms.resolution.value = resolution
+      child.material.uniforms.dimensions.value = newData.dimensions
+      child.count = newData.groups[i].totalCurveLength
+      child.material.uniformsNeedUpdate = true
+
+      const { translate, scale, rotate } = newData.groups[i].transform
+      child.material.uniforms.scaleCorrection.value = scale
+      child.position.set(translate.x, translate.y, 0)
+      child.scale.set(scale.x, scale.y, 1)
+      child.rotation.set(0, 0, rotate)
+    })
+  }
+  const reInitialize = useCallback(() => {
+    const resolution = new Vector2(
+      window.innerWidth * window.devicePixelRatio,
+      window.innerHeight * window.devicePixelRatio
+    )
+    const newData = keyframes.reInitialize(resolution)
+    if (!isEqual(newData.curveCounts, lastData.curveCounts)) {
+      setLastData(newData)
+    } else {
+      updateChildren(newData)
+    }
+  }, [lastData])
+
+  useEffect(() => {
+    updateChildren(lastData)
+  }, [lastData])
 
   return (
     <ChildComponent
@@ -80,38 +146,7 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
       defaultDraw={(self, frame, progress, ctx) => {
         if (typeof recalculate === 'function') progress = recalculate(progress)
         if (progress < lastProgress.current && recalculate) {
-          const newData = keyframes.reInitialize(resolution)
-
-          self.rotation.set(0, 0, newData.transform.rotate)
-          self.scale.set(...newData.transform.scale.toArray(), 1)
-          self.position.set(...newData.transform.translate.toArray(), 0)
-
-          self.children.forEach((c, i) => {
-            const child = c as THREE.InstancedMesh<
-              THREE.PlaneGeometry,
-              THREE.ShaderMaterial
-            >
-            child.material.uniforms.keyframesTex.value = newData.keyframesTex
-            child.material.uniforms.colorTex.value = newData.colorTex
-            child.material.uniforms.thicknessTex.value = newData.thicknessTex
-            child.material.uniforms.progress.value = progress
-            child.material.uniforms.curveEnds.value =
-              newData.groups[i].curveEnds
-            child.material.uniforms.curveIndexes.value =
-              newData.groups[i].curveIndexes
-            child.material.uniforms.controlPointCounts.value =
-              newData.groups[i].controlPointCounts
-            child.material.uniformsNeedUpdate = true
-            child.material.uniforms.dimensions.value = data.dimensions
-
-            child.count = groups[i].totalCurveLength
-
-            const { translate, scale, rotate } = data.groups[i].transform
-            child.material.uniforms.scaleCorrection.value = scale
-            child.position.set(translate.x, translate.y, 0)
-            child.scale.set(scale.x, scale.y, 1)
-            child.rotation.set(0, 0, rotate)
-          })
+          reInitialize()
         }
         lastProgress.current = progress
       }}
@@ -131,10 +166,9 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
             position={[...group.transform.translate.toArray(), 0]}
             scale={[...group.transform.scale.toArray(), 1]}
             rotation={[0, 0, group.transform.rotate]}
-            key={i}
+            key={i + now()}
             args={[undefined, undefined, maxCurveLength]}>
-            <planeGeometry
-              args={[defaults.size![0], defaults.size![1]]}></planeGeometry>
+            <planeGeometry args={[defaults.size![0], defaults.size![1]]} />
             <shaderMaterial
               transparent
               uniforms={{

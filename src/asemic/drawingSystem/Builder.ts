@@ -266,6 +266,7 @@ export default class Builder {
         controlPointCounts[i] = curve.length
         curveIndex++
       })
+      const curveCounts = curveIndexes.length
       return {
         transform: this.keyframe.groups[groupIndex].transform,
         curveEnds,
@@ -326,13 +327,16 @@ export default class Builder {
       RedFormat
     )
 
+    const curveCounts = groups.map(x => x.curveIndexes.length)
+
     return {
       keyframesTex,
       colorTex,
       thicknessTex,
       transform: this.keyframe.transform,
       groups,
-      dimensions
+      dimensions,
+      curveCounts
     }
   }
 

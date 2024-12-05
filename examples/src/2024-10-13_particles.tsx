@@ -15,6 +15,7 @@ const presets: Record<string, (g: Builder) => Builder> = {
           .join('')
       )
       .setWarp({ translate: [0, 0.5] }),
+  testing: g => g.text('testing').setWarp({ translate: [0, 0.5] }),
   lines: g =>
     g.eval(
       () =>
@@ -30,11 +31,97 @@ const presets: Record<string, (g: Builder) => Builder> = {
 export default function ParticlesTest() {
   // abcdefghijklmnopqrstuvwxyz
   // a poem in space
-  const letters = 'abcdefghijklmnopqrstuvwxyz'.split('')
-  const kf = new Builder(presets.lines)
+  const yin = (b: Builder) =>
+    b
+      .newCurve([0, 0], [0.4, 0])
+      .newCurve([0.6, 0], [1, 0])
+      .transform({ translate: [0, 0.33] })
+  const yang = (b: Builder) =>
+    b.newCurve([0, 0], [1, 0]).transform({ translate: [0, 0.33] })
+  const abundance55 = (b: Builder) => {
+    yang(b)
+    yin(b)
+    yang(b)
+    yang(b)
+    yin(b)
+    yin(b)
+  }
+  const bInjured36 = (b: Builder) => {
+    yang(b)
+    yin(b)
+    yang(b)
+    yin(b)
+    yin(b)
+    yin(b)
+  }
+  const eliminating43 = (b: Builder) => {
+    yang(b)
+    yang(b)
+    yang(b)
+    yang(b)
+    yang(b)
+    yin(b)
+  }
+  const decrease41 = (b: Builder) => {
+    yang(b)
+    yang(b)
+    yin(b)
+    yin(b)
+    yin(b)
+    yang(b)
+  }
+  const return24 = (b: Builder) => {
+    yang(b)
+    yin(b)
+    yin(b)
+    yin(b)
+    yin(b)
+    yin(b)
+  }
+  const union8 = (b: Builder) => {
+    yin(b)
+    yin(b)
+    yin(b)
+    yin(b)
+    yang(b)
+    yin(b)
+  }
+  let i = 0
+  const kf = new Builder(b => {
+    b.eval(b => {
+      b.newGroup({
+        scale: [1, 0.3],
+        translate: [0, 0.1]
+      })
+
+      switch (i) {
+        case 0:
+          abundance55(b)
+          break
+        case 1:
+          bInjured36(b)
+          break
+        case 2:
+          eliminating43(b)
+          break
+        case 3:
+          decrease41(b)
+          break
+        case 4:
+          return24(b)
+          break
+        case 5:
+          union8(b)
+          break
+      }
+
+      i = (i + 1) % 6
+      return b
+    })
+  })
 
   return (
-    <Reactive progress={t => (t * 20) % 1}>
+    <Reactive progress={t => (t * 5) % 1}>
       <Asemic name='a'>
         <Brush
           keyframes={kf}

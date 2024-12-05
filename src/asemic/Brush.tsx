@@ -1,31 +1,14 @@
-import { useFrame, useThree } from '@react-three/fiber'
-import { isEqual, now, range, sumBy } from 'lodash'
-import {
-  Ref,
-  RefObject,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState
-} from 'react'
+import { useFrame } from '@react-three/fiber'
+import { isEqual, now } from 'lodash'
+import { RefObject, useCallback, useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { Vector2 } from 'three'
-import {
-  bezierPoint,
-  multiBezierProgress,
-  multiBezierProgressJS
-} from '../../util/src/shaders/bezier'
+import { bezierPoint, multiBezierProgress } from '../../util/src/shaders/bezier'
 import { rotate2d } from '../../util/src/shaders/manipulation'
-import { hash } from '../../util/src/shaders/utilities'
 import { ChildComponent } from '../blocks/FrameChildComponents'
 import { ChildProps } from '../types'
-import FeedbackTexture, { FeedbackTextureRef } from './FeedbackTexture'
-import { Mesh } from '../frames/CanvasGL'
-import Builder from './drawingSystem/Builder'
 import { useEventListener } from '../utilities/react'
-
-const targetVector = new THREE.Vector2()
+import Builder from './drawingSystem/Builder'
 
 type VectorList = [number, number]
 type Vector3List = [number, number, number]
@@ -120,6 +103,7 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
       child.rotation.set(0, 0, rotate)
     })
   }
+
   const reInitialize = useCallback(() => {
     const resolution = new Vector2(
       window.innerWidth * window.devicePixelRatio,

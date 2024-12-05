@@ -21,6 +21,7 @@ import { lerp, scale } from '@/util/src/math'
 import { multiBezierProgressJS } from '@/util/src/shaders/bezier'
 import { Jitter } from '../Brush'
 import invariant from 'tiny-invariant'
+import { e } from 'mathjs'
 
 const SHAPES: Record<string, Coordinate[]> = {
   circle: [
@@ -49,16 +50,19 @@ export default class Builder {
     groups: GroupData[]
     transform: TransformData
   } = this.defaultKeyframe()
-  protected TargetInfo: [number, number] = [0, 0]
+  protected targetInfo: [number, number] = [0, 0]
   protected targetFrames: [number, number] = [0, 0]
-  protected initialize: (t: Builder) => Builder
+  protected initialize: (t: Builder) => Builder | void
 
   protected defaultKeyframe() {
     return { groups: [], transform: this.toTransform({}) }
   }
 
   reset(clear = false) {
-    this.transformData = this.toTransform({})
+    this.transformData.scale = new PointBuilder([1, 1])
+    this.transformData.rotate = 0
+    this.transformData.translate = new PointBuilder()
+
     if (clear) this.transforms = []
   }
 
@@ -67,7 +71,7 @@ export default class Builder {
       if (from < 0) from += this.keyframe.groups.length
       if (to === undefined) to = from
       else if (to < 0) to += this.keyframe.groups.length
-      this.TargetInfo = [from, to]
+      this.targetInfo = [from, to]
       return this
     }
     if (typeof groups !== 'undefined') {
@@ -101,9 +105,17 @@ export default class Builder {
 
   protected toTransform(transform: PreTransformData): TransformData {
     const transformData: TransformData = {
-      scale: new PointBuilder([1, 1]),
-      rotate: 0,
-      translate: new PointBuilder()
+      scale:
+        typeof transform.scale === 'number'
+          ? new PointBuilder([transform.scale, transform.scale])
+          : transform.scale instanceof Array
+          ? new PointBuilder(transform.scale)
+          : transform.scale ?? new PointBuilder([1, 1]),
+      rotate: this.toRad(transform.rotate ?? 0),
+      translate:
+        transform.translate instanceof PointBuilder
+          ? transform.translate
+          : new PointBuilder(transform.translate)
     }
     if (transform.remap) {
       v1.copy(this.toPoint(transform.remap[0]))
@@ -120,30 +132,8 @@ export default class Builder {
       }
 
       transform.remap = undefined
-      return this.combineTransforms(tf, this.toTransform(transform))
-    }
-    if (transform.translate) {
-      transformData.translate.add(
-        transform.translate instanceof PointBuilder
-          ? transform.translate
-          : new PointBuilder(transform.translate)
-      )
-    }
-    if (transform.scale) {
-      if (typeof transform.scale === 'number') {
-        transformData.scale.multiplyScalar(transform.scale)
-      } else {
-        transformData.scale.multiply(
-          transform.scale instanceof PointBuilder
-            ? transform.scale
-            : new PointBuilder(transform.scale)
-        )
-      }
-    }
-    if (transform.rotate !== undefined) {
-      transformData.rotate += this.toRad(transform.rotate)
-    }
-    return transformData
+      return this.combineTransforms(tf, transformData)
+    } else return transformData
   }
 
   toPoints(...coordinates: (Coordinate | PointBuilder)[]) {
@@ -617,7 +607,7 @@ export default class Builder {
     this.target(groups)
     const groupCount = this.keyframe.groups.length
 
-    for (let i = this.TargetInfo[0]; i <= this.TargetInfo[1]; i++) {
+    for (let i = this.targetInfo[0]; i <= this.targetInfo[1]; i++) {
       callback(this.keyframe.groups[i], {
         groupProgress: i / groupCount,
         bounds: this.getBounds(this.keyframe.groups[i].curves.flat())
@@ -625,10 +615,11 @@ export default class Builder {
     }
   }
 
-  debug() {
+  debug(target?: TargetInfo) {
+    this.target(target)
     console.log(
       this.keyframe.groups
-        .slice(this.TargetInfo[0], this.TargetInfo[1] + 1)
+        .slice(this.targetInfo[0], this.targetInfo[1] + 1)
         .map(
           g =>
             `*${g.transform.scale.toArray().map(x => x.toFixed(2))} @${
@@ -689,23 +680,17 @@ ${g.curves
   }
 
   newGroup(transform?: PreTransformData) {
-    if (transform) this.transform(transform)
     this.keyframe.groups.push({
       curves: [],
-      transform: this.combineTransforms(
-        cloneDeep(last(this.keyframe.groups)?.transform) ??
-          this.toTransform({}),
-        this.transformData
-      )
+      transform: this.cloneTransform(this.transform)
     })
 
-    this.reset(true)
     this.target(-1)
     return this
   }
 
   newCurve(...points: (Coordinate | PointBuilder)[]) {
-    this.keyframe.groups[this.TargetInfo[0]].curves.push([])
+    this.keyframe.groups[this.targetInfo[0]].curves.push([])
     this.lastCurve(c => c.push(...this.toPoints(...points)))
     return this
   }
@@ -765,10 +750,11 @@ ${g.curves
           this.transformData = last(this.transforms) ?? this.toTransform({})
           break
         case true:
-          this.transformData = this.toTransform({})
+          this.reset()
           break
       }
     }
+
     this.transformData = this.combineTransforms(
       this.transformData,
       this.toTransform(transform)
@@ -1215,7 +1201,7 @@ ${g.curves
     return this.packToTexture(resolution)
   }
 
-  constructor(initialize: (builder: Builder) => Builder) {
+  constructor(initialize: (builder: Builder) => Builder | void) {
     this.initialize = initialize
   }
 }

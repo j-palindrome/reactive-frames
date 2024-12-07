@@ -44,18 +44,17 @@ const v1 = new Vector2(),
 
 type TargetInfo = [number, number] | number
 export default class Builder {
-  protected transformData: TransformData = this.toTransform({})
+  protected transformData: TransformData = this.toTransform()
   protected transforms: TransformData[] = []
   protected keyframe: {
     groups: GroupData[]
     transform: TransformData
   } = this.defaultKeyframe()
   protected targetInfo: [number, number] = [0, 0]
-  protected targetFrames: [number, number] = [0, 0]
   protected initialize: (t: Builder) => Builder | void
 
   protected defaultKeyframe() {
-    return { groups: [], transform: this.toTransform({}) }
+    return { groups: [], transform: this.toTransform() }
   }
 
   reset(clear = false) {
@@ -103,7 +102,22 @@ export default class Builder {
     return this.applyTransform(point, this.transformData, true).toArray()
   }
 
-  protected toTransform(transform: PreTransformData): TransformData {
+  protected cloneTransform(transform: TransformData): TransformData {
+    return {
+      scale: transform.scale.clone(),
+      rotate: transform.rotate,
+      translate: transform.translate.clone()
+    }
+  }
+
+  protected toTransform(transform?: PreTransformData): TransformData {
+    if (!transform) {
+      return {
+        scale: new PointBuilder([1, 1]),
+        rotate: 0,
+        translate: new PointBuilder()
+      }
+    }
     const transformData: TransformData = {
       scale:
         typeof transform.scale === 'number'
@@ -613,6 +627,7 @@ export default class Builder {
         bounds: this.getBounds(this.keyframe.groups[i].curves.flat())
       })
     }
+    return this
   }
 
   debug(target?: TargetInfo) {
@@ -661,9 +676,9 @@ ${g.curves
   }
 
   protected lastCurve(callback: (curve: PointBuilder[]) => void) {
-    const lastGroup = last(this.keyframe.groups)!
-    callback(last(lastGroup.curves)!)
-    return this
+    return this.groups(g => {
+      callback(last(g.curves)!)
+    })
   }
 
   /**
@@ -680,9 +695,16 @@ ${g.curves
   }
 
   newGroup(transform?: PreTransformData) {
+    const newTransform =
+      last(this.keyframe.groups)?.transform ?? this.toTransform()
     this.keyframe.groups.push({
-      curves: [],
-      transform: this.cloneTransform(this.transform)
+      curves: [[]],
+      transform: transform
+        ? this.combineTransforms(
+            this.cloneTransform(newTransform),
+            this.toTransform(transform)
+          )
+        : this.cloneTransform(newTransform)
     })
 
     this.target(-1)
@@ -690,7 +712,12 @@ ${g.curves
   }
 
   newCurve(...points: (Coordinate | PointBuilder)[]) {
-    this.keyframe.groups[this.targetInfo[0]].curves.push([])
+    if (this.keyframe.groups[this.targetInfo[1]].curves.length == 0) {
+      return this
+    }
+    this.groups(g => {
+      g.curves.push([])
+    })
     this.lastCurve(c => c.push(...this.toPoints(...points)))
     return this
   }
@@ -744,10 +771,10 @@ ${g.curves
     if (transform.reset) {
       switch (transform.reset) {
         case 'pop':
-          this.transformData = this.transforms.pop() ?? this.toTransform({})
+          this.transformData = this.transforms.pop() ?? this.toTransform()
           break
         case 'last':
-          this.transformData = last(this.transforms) ?? this.toTransform({})
+          this.transformData = last(this.transforms) ?? this.toTransform()
           break
         case true:
           this.reset()
@@ -760,7 +787,7 @@ ${g.curves
       this.toTransform(transform)
     )
     if (transform.push) {
-      this.transforms.push(cloneDeep(this.transformData))
+      this.transforms.push(this.cloneTransform(this.transformData))
     }
 
     return this

@@ -90,8 +90,8 @@ export default function ParticlesTest() {
   const kf = new Builder(b => {
     b.eval(b => {
       b.newGroup({
-        scale: [1, 0.3],
-        translate: [0, 0.1]
+        reset: true,
+        scale: [1, 0.3]
       })
 
       switch (i) {
@@ -117,7 +117,7 @@ export default function ParticlesTest() {
 
       i = (i + 1) % 6
       return b
-    })
+    }, 2)
   })
 
   return (

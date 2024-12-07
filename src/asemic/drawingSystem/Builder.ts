@@ -695,17 +695,17 @@ ${g.curves
   }
 
   newGroup(transform?: PreTransformData) {
-    const newTransform =
+    this.transformData = this.cloneTransform(
       last(this.keyframe.groups)?.transform ?? this.toTransform()
+    )
+    if (transform) this.transform(transform)
+
     this.keyframe.groups.push({
       curves: [[]],
-      transform: transform
-        ? this.combineTransforms(
-            this.cloneTransform(newTransform),
-            this.toTransform(transform)
-          )
-        : this.cloneTransform(newTransform)
+      transform: this.cloneTransform(this.transformData)
     })
+
+    this.reset(true)
 
     this.target(-1)
     return this

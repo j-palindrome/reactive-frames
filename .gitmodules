@@ -4,3 +4,6 @@ url = https://github.com/j-palindrome/util.git
 [submodule "examples/util"]
 	path = util
 	url = https://github.com/j-palindrome/util
+[submodule "hydra-generator-ts"]
+	path = hydra-generator-ts
+	url = https://github.com/j-palindrome/hydra-generator-ts.git

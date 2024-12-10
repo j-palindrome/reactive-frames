@@ -2,41 +2,51 @@ import { useRef } from 'react'
 import { FrameComponent } from '../blocks/FrameChildComponents'
 import { omit } from 'lodash'
 import { CanvasComponentProps, ParentProps } from '../types'
-import type HydraInstance from 'hydra-synth'
+import CanvasComponent, { extractCanvasProps } from '../blocks/CanvasComponent'
+import REGL, { Regl } from 'regl'
+import {
+  createGenerators,
+  defaultGenerators,
+  defaultModifiers,
+  Hydra,
+  generators
+} from 'hydra-ts'
 
-const Hydra = (
-  props: ParentProps<Omit<CanvasComponentProps, 'type'>, HydraInstance['synth']>
+const HydraEx = (
+  props: ParentProps<
+    Omit<CanvasComponentProps, 'type'>,
+    { hydra: Hydra; generators: typeof generators }
+  >
 ) => {
-  // const canvasRef = useRef<HTMLCanvasElement>(null!)
-  const hydraRef = useRef<any>(null)
+  const canvasRef = useRef<HTMLCanvasElement>(null!)
+  const hydraRef = useRef<Hydra>(null!)
 
   return (
     <>
-      {/* <CanvasComponent
+      <CanvasComponent
         ref={canvasRef}
         {...extractCanvasProps(props)}
         onResize={self => {
           if (!hydraRef.current) return
-          hydraRef.current.width = self.width
-          hydraRef.current.height = self.height
-          hydraRef.current.synth.width = self.width
-          hydraRef.current.synth.height = self.height
+          hydraRef.current.setResolution(
+            self.width * devicePixelRatio,
+            self.height * devicePixelRatio
+          )
         }}
-      /> */}
+      />
       <FrameComponent
         options={omit(props, 'children')}
         cleanupSelf={self => {
-          hydraRef.current.synth.hush()
-          hydraRef.current.canvas.remove()
+          hydraRef.current.hush()
         }}
         getSelf={async options => {
-          const { default: HydraInstance } = await import('hydra-synth')
-          const hydra = new HydraInstance({
-            width: options.width,
-            height: options.height,
-            autoLoop: true,
-            makeGlobal: false,
-            detectAudio: false,
+          const hydra = new Hydra({
+            width: options.width ?? window.innerWidth,
+            height: options.height ?? window.innerHeight,
+            // @ts-ignore
+            regl: REGL({
+              canvas: canvasRef.current
+            }),
             ...options
           })
           hydraRef.current = hydra
@@ -47,8 +57,15 @@ const Hydra = (
             c.classList.add(...options.className.split(' '))
           }
 
+          // const generators = createGenerators({
+          //   generatorTransforms: defaultGenerators,
+          //   modifierTransforms: defaultModifiers
+          // })
           hydraRef.current = hydra
-          return hydra.synth
+          return { hydra, generators }
+        }}
+        defaultDraw={h => {
+          h.hydra.tick(1 / 60)
         }}>
         {props.children}
       </FrameComponent>
@@ -56,4 +73,4 @@ const Hydra = (
   )
 }
 
-export default Hydra
+export default HydraEx

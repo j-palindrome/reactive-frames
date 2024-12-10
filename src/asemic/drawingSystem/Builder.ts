@@ -118,7 +118,7 @@ export default class Builder {
         translate: new PointBuilder()
       }
     }
-    const transformData: TransformData = {
+    return {
       scale:
         typeof transform.scale === 'number'
           ? new PointBuilder([transform.scale, transform.scale])
@@ -131,23 +131,6 @@ export default class Builder {
           ? transform.translate
           : new PointBuilder(transform.translate)
     }
-    if (transform.remap) {
-      v1.copy(this.toPoint(transform.remap[0]))
-      v2.copy(this.toPoint(transform.remap[1]))
-
-      const rotate = v2.clone().sub(v1).angle()
-      const scale = new PointBuilder([v1.distanceTo(v2), v1.distanceTo(v2)])
-      const translate = new PointBuilder().copy(v1)
-
-      const tf: TransformData = {
-        scale,
-        rotate,
-        translate
-      }
-
-      transform.remap = undefined
-      return this.combineTransforms(tf, transformData)
-    } else return transformData
   }
 
   toPoints(...coordinates: (Coordinate | PointBuilder)[]) {
@@ -196,15 +179,27 @@ export default class Builder {
 
   combineTransforms(
     transformData: TransformData,
-    nextTransformData: TransformData
+    nextTransformData: TransformData,
+    invert: boolean = false
   ) {
-    transformData.translate.add(
-      nextTransformData.translate
-      // .multiply(transformData.scale)
-      // .rotateAround({ x: 0, y: 0 }, transformData.rotate)
-    )
-    transformData.rotate += nextTransformData.rotate
-    transformData.scale.multiply(nextTransformData.scale)
+    if (invert) {
+      transformData.translate.sub(
+        nextTransformData.translate
+          .divide(transformData.scale)
+          .rotateAround({ x: 0, y: 0 }, -transformData.rotate)
+      )
+      transformData.rotate -= nextTransformData.rotate
+      transformData.scale.divide(nextTransformData.scale)
+    } else {
+      transformData.translate.add(
+        nextTransformData.translate
+          .multiply(transformData.scale)
+          .rotateAround({ x: 0, y: 0 }, transformData.rotate)
+      )
+      transformData.rotate += nextTransformData.rotate
+      transformData.scale.multiply(nextTransformData.scale)
+    }
+
     return transformData
   }
 
@@ -694,19 +689,11 @@ ${g.curves
     })
   }
 
-  newGroup(transform?: PreTransformData) {
-    this.transformData = this.cloneTransform(
-      last(this.keyframe.groups)?.transform ?? this.toTransform()
-    )
-    if (transform) this.transform(transform)
-
+  newGroup() {
     this.keyframe.groups.push({
       curves: [[]],
-      transform: this.cloneTransform(this.transformData)
+      transform: this.toTransform()
     })
-
-    this.reset(true)
-
     this.target(-1)
     return this
   }
@@ -740,7 +727,7 @@ ${g.curves
     let lineCount = 0
     for (let letter of str) {
       if (this.letters[letter]) {
-        this.transform({ translate: [0.1, 0] })
+        this.transform({ translate: [0.1, 0], push: true })
           .newGroup()
           .letter(letter)
       } else if (letter === '\n') {
@@ -774,7 +761,14 @@ ${g.curves
           this.transformData = this.transforms.pop() ?? this.toTransform()
           break
         case 'last':
-          this.transformData = last(this.transforms) ?? this.toTransform()
+          this.transformData = this.cloneTransform(
+            last(this.transforms) ?? this.toTransform()
+          )
+          break
+        case 'group':
+          this.transformData = this.cloneTransform(
+            last(this.keyframe.groups)?.transform ?? this.toTransform()
+          )
           break
         case true:
           this.reset()
@@ -786,6 +780,7 @@ ${g.curves
       this.transformData,
       this.toTransform(transform)
     )
+
     if (transform.push) {
       this.transforms.push(this.cloneTransform(this.transformData))
     }
@@ -807,7 +802,7 @@ ${g.curves
       this.newCurve([1, 1], [0.5, 1.3], [0, 0.5], [0.5, -0.3], [1, 0])
         .newCurve([0, 1, { translate: [1, 0] }], [-0.1, 0.5], [0, -0.3])
         .slide(0.1)
-        .within([0, 0, { reset: true }], [0.5, 0.6])
+        .within([0, 0, { reset: 'last' }], [0.5, 0.6])
         .transform({ translate: [0.5, 0] }),
     b: () =>
       this.newCurve([0, 1], [0, 0])
@@ -870,10 +865,10 @@ ${g.curves
         .newCurve([0, 0.6, { scale: [0.5, 0.7] }], [1, 1], [1, 0])
         .transform({ translate: [0.5, 0], reset: 'last' }),
     i: () =>
-      this.transform({ translate: [0.2, 0] })
+      this.transform({ translate: [0.2, 0], push: true })
         .newCurve([0, 0], [0, 1, { scale: [1, 0.5] }])
         .newCurve(
-          [0, 0, { reset: true, translate: [0.2, 0.52], scale: 0.05 / 0.5 }],
+          [0, 0, { reset: 'last', translate: [0, 0.52], scale: 0.05 / 0.5 }],
           [-1, 0],
           [-1, 1],
           [1, 1],
@@ -922,7 +917,7 @@ ${g.curves
       }),
     m: () =>
       this.newCurve([0, 0, { scale: [0.5, 0.5] }], [0, 1], [1, 1], [1, 0])
-        .newCurve([0, 0, { translate: [0.5, 0] }], [0, 1], [1, 1], [1, 0])
+        .newCurve([0, 0, { translate: [1, 0] }], [0, 1], [1, 1], [1, 0])
         .transform({ translate: [1, 0], reset: 'last' }),
     n: () =>
       this.newCurve(
@@ -934,11 +929,11 @@ ${g.curves
     o: () =>
       this.newCurve()
         .newShape('circle', { scale: [0.2, 0.25], translate: [0.25, 0.25] })
-        .transform({ reset: true, translate: [0.5, 0] }),
+        .transform({ reset: 'last', translate: [0.5, 0] }),
     p: () =>
       this.newCurve([0, 0, { translate: [0, -0.5] }], [0, 1])
         .newCurve(
-          [0, 1, { reset: true, scale: 0.5 }],
+          [0, 1, { reset: 'last', scale: 0.5 }],
           [1, 1.3],
           [1, -0.3],
           [0, 0]
@@ -969,28 +964,16 @@ ${g.curves
         .transform({ translate: [0.5, 0], reset: 'last' }),
     s: () =>
       this.newCurve(
-        [
-          0,
-          0,
-          {
-            remap: [
-              [0.2, 0.5],
-              [0.2, 0]
-            ],
-            push: true
-          }
-        ],
-        [0, 1, { scale: [0.4, -0.4] }],
-        [1, 1],
-        [1, 0]
+        [0.5, 1],
+        [0.2, 1],
+        [0.2, 0.6],
+        [0.5, 0.6],
+        [1, 0.6],
+        [1, 0],
+        [0.5, 0]
       )
-        .newPoints(
-          [0, 1, { reset: 'last', scale: [0.6, 0.6], translate: [0, -0.2] }],
-          [1, 1],
-          [1, 0]
-        )
-        // .within([0, 0, { reset: 'last' }], [0.5, 1])
-        .transform({ translate: [0.6, 0], reset: true }),
+        .within([0, 0], [0.5, 0.5])
+        .transform({ translate: [0.5, 0], reset: 'last' }),
     t: () =>
       this.newCurve([0, 0], [0, 1])
         .newCurve([0, 0, { translate: [0, 0.65], scale: [0.4, 1] }], [1, 0])

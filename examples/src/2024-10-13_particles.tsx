@@ -1,9 +1,11 @@
-import { cloneDeep, pick, range, sample } from 'lodash'
+import { cloneDeep, last, pick, range, sample } from 'lodash'
 import { Canvas2D, Reactive } from '../../src'
 import Asemic from '../../src/asemic/Asemic'
 import Brush from '../../src/asemic/Brush'
 import Builder from '../../src/asemic/drawingSystem/Builder'
 import { QuadraticBezierCurve, Vector2 } from 'three'
+import { TransformApplication } from '../../dist/utilities/shaderGeneration/glsl/Glsl'
+import { TransformDefinition } from '../../dist/utilities/shaderGeneration/glsl/transformDefinitions'
 
 const letters = 'abcdefghijklmnopqrstuvwxyz'.split('')
 const presets: Record<string, (g: Builder) => Builder> = {
@@ -35,9 +37,9 @@ export default function ParticlesTest() {
     b
       .newCurve([0, 0], [0.4, 0])
       .newCurve([0.6, 0], [1, 0])
-      .transform({ translate: [0, 0.33] })
+      .transform({ translate: [0, 1 / 6] })
   const yang = (b: Builder) =>
-    b.newCurve([0, 0], [1, 0]).transform({ translate: [0, 0.33] })
+    b.newCurve([0, 0], [1, 0]).transform({ translate: [0, 1 / 6] })
   const abundance55 = (b: Builder) => {
     yang(b)
     yin(b)
@@ -86,51 +88,70 @@ export default function ParticlesTest() {
     yang(b)
     yin(b)
   }
+
   let i = 0
   const kf = new Builder(b => {
+    const REP = 6
+    b.transform({
+      scale: [1, 1 / REP],
+      translate: [0, 1 / REP / 6 / 2 / 2],
+      push: true
+    })
+
     b.eval(b => {
-      b.newGroup({
-        scale: [0, 0.3],
-        translate: [0, 0.4]
-      })
+      b.eval(b => {
+        b.newGroup()
 
-      switch (i) {
-        case 0:
-          abundance55(b)
-          break
-        case 1:
-          bInjured36(b)
-          break
-        case 2:
-          eliminating43(b)
-          break
-        case 3:
-          decrease41(b)
-          break
-        case 4:
-          return24(b)
-          break
-        case 5:
-          union8(b)
-          break
-      }
+        switch (i) {
+          case 0:
+            abundance55(b)
+            break
+          case 1:
+            bInjured36(b)
+            break
+          case 2:
+            eliminating43(b)
+            break
+          case 3:
+            decrease41(b)
+            break
+          case 4:
+            return24(b)
+            break
+          case 5:
+            union8(b)
+            break
+        }
 
-      i = (i + 1) % 6
-      return b
-    }, 2)
+        b.transform({ reset: 'last', translate: [0, 1 / 6 / 2] })
+      }, 2)
+
+      b.transform({ reset: 'last', translate: [0, 1], push: true })
+    }, REP)
+    i = (i + 1) % 6
   })
 
   return (
-    <Reactive progress={t => (t * 5) % 1}>
+    <Reactive progress={t => (t * 20) % 1}>
       <Asemic name='a'>
         <Brush
-          keyframes={kf}
+          render={kf}
           name='b'
           defaults={{
             a: 1,
             size: [1, 1]
           }}
           recalculate
+          modifyIncludes={
+            /*glsl*/ `
+`
+          }
+          modifyPosition={
+            /*glsl*/ `
+position = 
+return position;
+          `
+          }
         />
       </Asemic>
     </Reactive>

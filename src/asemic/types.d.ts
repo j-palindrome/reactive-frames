@@ -13,7 +13,7 @@ declare global {
 
   type PreTransformData = {
     push?: true
-    reset?: true | 'last' | 'pop'
+    reset?: true | 'last' | 'pop' | 'group'
     translate?: [number, number] | PointBuilder
     scale?: [number, number] | number | PointBuilder
     rotate?: number

@@ -1,14 +1,12 @@
-import { useFrame } from '@react-three/fiber'
 import { isEqual, now } from 'lodash'
-import { RefObject, useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { Vector2 } from 'three'
 import { bezierPoint, multiBezierProgress } from '../../util/src/shaders/bezier'
 import { rotate2d } from '../../util/src/shaders/manipulation'
-import { ChildComponent } from '../blocks/FrameChildComponents'
-import { ChildProps } from '../types'
 import { useEventListener } from '../utilities/react'
 import Builder from './drawingSystem/Builder'
+import { useFrame } from '@react-three/fiber'
 
 type VectorList = [number, number]
 type Vector3List = [number, number, number]
@@ -25,17 +23,18 @@ export type BrushSettings = {
   recalculate?: boolean | ((progress: number) => number)
   modifyPosition?: string
   modifyColor?: string
-  keyframes: Builder
+  modifyIncludes?: string
+  render: ConstructorParameters<typeof Builder>[0]
 }
 
-export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
+export default function Brush(props: BrushSettings) {
   let {
     spacing = 1,
     defaults,
-    modifyPosition,
+    modifyPosition = `return position;`,
+    modifyIncludes = ``,
     modifyColor = `return color;`,
-    keyframes,
-    recalculate = false
+    render
   } = props
   defaults = {
     size: [1, 1],
@@ -45,12 +44,11 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
     rotation: 0,
     ...defaults
   }
+  const keyframes = new Builder(render)
 
   useEventListener(
     'resize',
     () => {
-      console.log('reinit')
-
       reInitialize()
     },
     []
@@ -121,54 +119,40 @@ export default function Brush(props: ChildProps<BrushSettings, {}, {}>) {
     updateChildren(lastData)
   }, [lastData])
 
+  // useFrame(() => {
+  //   reInitialize()
+  // })
+
   return (
-    <ChildComponent
-      options={{ ...props }}
-      getSelf={() => {
-        return meshRef.current
-      }}
-      defaultDraw={(self, frame, progress, ctx) => {
-        if (typeof recalculate === 'function') progress = recalculate(progress)
-        if (progress < lastProgress.current && recalculate) {
-          reInitialize()
-        }
-        lastProgress.current = progress
-      }}
-      show={self => {
-        self.visible = true
-      }}
-      hide={self => {
-        self.visible = false
-      }}>
-      <group
-        ref={meshRef}
-        scale={[...transform.scale.toArray(), 1]}
-        rotation={[0, 0, transform.rotate]}
-        position={[...transform.translate.toArray(), 0]}>
-        {groups.map((group, i) => (
-          <instancedMesh
-            position={[...group.transform.translate.toArray(), 0]}
-            scale={[...group.transform.scale.toArray(), 1]}
-            rotation={[0, 0, group.transform.rotate]}
-            key={i + now()}
-            args={[undefined, undefined, maxCurveLength]}>
-            <planeGeometry args={[defaults.size![0], defaults.size![1]]} />
-            <shaderMaterial
-              transparent
-              uniforms={{
-                colorTex: { value: colorTex },
-                thicknessTex: { value: thicknessTex },
-                keyframesTex: { value: keyframesTex },
-                resolution: { value: resolution },
-                progress: { value: 0 },
-                dimensions: { value: dimensions },
-                curveEnds: { value: group.curveEnds },
-                curveIndexes: { value: group.curveIndexes },
-                controlPointCounts: { value: group.controlPointCounts },
-                scaleCorrection: { value: group.transform.scale }
-              }}
-              vertexShader={
-                /*glsl*/ `
+    <group
+      ref={meshRef}
+      scale={[...transform.scale.toArray(), 1]}
+      rotation={[0, 0, transform.rotate]}
+      position={[...transform.translate.toArray(), 0]}>
+      {groups.map((group, i) => (
+        <instancedMesh
+          position={[...group.transform.translate.toArray(), 0]}
+          scale={[...group.transform.scale.toArray(), 1]}
+          rotation={[0, 0, group.transform.rotate]}
+          key={i + now()}
+          args={[undefined, undefined, maxCurveLength]}>
+          <planeGeometry args={[defaults.size![0], defaults.size![1]]} />
+          <shaderMaterial
+            transparent
+            uniforms={{
+              colorTex: { value: colorTex },
+              thicknessTex: { value: thicknessTex },
+              keyframesTex: { value: keyframesTex },
+              resolution: { value: resolution },
+              progress: { value: 0 },
+              dimensions: { value: dimensions },
+              curveEnds: { value: group.curveEnds },
+              curveIndexes: { value: group.curveIndexes },
+              controlPointCounts: { value: group.controlPointCounts },
+              scaleCorrection: { value: group.transform.scale }
+            }}
+            vertexShader={
+              /*glsl*/ `
 uniform int curveEnds[${group.curveEnds.length}];
 uniform int controlPointCounts[${group.controlPointCounts.length}];
 uniform int curveIndexes[${group.curveIndexes.length}];
@@ -178,6 +162,7 @@ uniform sampler2D thicknessTex;
 uniform vec2 dimensions;
 uniform vec2 resolution;
 uniform vec2 scaleCorrection;
+uniform float progress;
 
 out vec2 vUv;
 out vec4 vColor;
@@ -186,8 +171,13 @@ out float v_test;
 ${bezierPoint}
 ${multiBezierProgress}
 ${rotate2d}
-vec2 modifyPosition(vec2 position) {
-  ${'return position;'}
+${modifyIncludes}
+vec2 modifyPosition(
+  vec2 position, 
+  float progress, 
+  float pointProgress, 
+  float curveProgress) {
+  ${modifyPosition}
 }
 
 void main() {
@@ -213,7 +203,6 @@ void main() {
   } else {
     pointProgress = float(id) / float(curveEnds[curveIndex]);
   }
-  if (pointProgress < 0.5) v_test = 1.;
 
   BezierPoint point;
   float thickness;
@@ -275,19 +264,22 @@ void main() {
     projectionMatrix 
     * modelViewMatrix 
     * vec4(modifyPosition(
-      point.position 
+        point.position,
+        progress,
+        pointProgress,
+        curveProgress)
       + rotate2d(
         position.xy * pixel
         * vec2(thickness, 1), 
         point.rotation + 1.5707) 
         / aspectRatio 
-        / scaleCorrection),
+        / scaleCorrection,
       0, 1);
 }
 `
-              }
-              fragmentShader={
-                /*glsl*/ `
+            }
+            fragmentShader={
+              /*glsl*/ `
 uniform vec2 resolution;
 in vec2 vUv;
 in vec4 vColor;
@@ -302,31 +294,10 @@ void main() {
   gl_FragColor = processColor(vColor, vUv);
   // gl_FragColor = processColor(vec4(v_test, 1,1,1), vUv);
 }`
-              }
-            />
-          </instancedMesh>
-        ))}
-      </group>
-    </ChildComponent>
-  )
-}
-
-function DisplayTexture({
-  map
-}: {
-  map: RefObject<{ texture: THREE.Texture }>
-}) {
-  const displayRef = useRef<
-    THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>
-  >(null!)
-  useFrame(() => {
-    displayRef.current.material.map = map.current?.texture ?? null
-    displayRef.current.material.needsUpdate = true
-  })
-  return (
-    <mesh ref={displayRef} position={[0.5, 0.5, 0]}>
-      <planeGeometry />
-      <meshBasicMaterial />
-    </mesh>
+            }
+          />
+        </instancedMesh>
+      ))}
+    </group>
   )
 }

@@ -22,5 +22,5 @@
       "@/*": ["./*"]
     }
   },
-  "include": ["src/**/*", "util/**/*", "examples/src/Test.tsx"]
+  "include": ["src/**/*", "util/**/*", "hydra-generator-ts/**/*"]
 }

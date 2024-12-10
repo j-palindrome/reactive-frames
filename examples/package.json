@@ -13,6 +13,7 @@
     "@types/lodash": "^4.17.10",
     "@types/three": "^0.165.0",
     "animejs": "^3.2.2",
+    "hydra-ts": "^1.0.0",
     "lodash": "^4.17.21",
     "nice-color-palettes": "^4.0.0",
     "react": "^18.3.1",

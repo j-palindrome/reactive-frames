@@ -101,17 +101,15 @@ export default function Brush({
     updateChildren(lastData)
   }, [lastData])
 
-  // useEffect(() => {
-  //   let timeout
-  //   const reinit = () => {
-  //     reInitialize()
-  //     timeout = window.setTimeout(reinit, Math.random() * 100)
-  //   }
-  //   reinit()
-  //   return () => window.clearTimeout(timeout)
-  // }, [])
-
-  console.log(lastData.curveCounts)
+  useEffect(() => {
+    let timeout
+    const reinit = () => {
+      reInitialize()
+      timeout = window.setTimeout(reinit, Math.random() * 100)
+    }
+    reinit()
+    return () => window.clearTimeout(timeout)
+  }, [])
 
   return (
     <group

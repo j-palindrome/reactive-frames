@@ -29,6 +29,10 @@ export default function DigiRis() {
 
   const [currentChild, setCurrentChild] = useState(0)
 
+  const defaultFunc = (b: Builder) =>
+    // @ts-ignore
+    b.setWarp({ thickness: 2, color: new Color('pink') })
+
   const slides: {
     hydra?: (h: Hydra['synth']) => Hydra['synth']
     asemic?: ((b: Builder) => Builder)[]
@@ -99,11 +103,13 @@ export default function DigiRis() {
       // If we inquire step by step into what technology, represented as means, actually is, then we shall arrive at revealing. The possibility of all productive manufacturing lies in revealing.
       asemic: [
         b =>
-          b.text('the open', {
-            translate: [0.1, 0.5],
-            scale: 0.8,
-            alpha: 0
-          }),
+          defaultFunc(
+            b.text('the open', {
+              translate: [0.1, 0.5],
+              scale: 0.8,
+              alpha: 0
+            })
+          ),
         b =>
           b
             .transform({ translate: [0.5, 0.5] })
@@ -225,8 +231,9 @@ robust involved a fair amount of work.`,
       hydra: src => src.saturate(0).thresh(0.5),
       asemic: [
         b =>
-          b.text(
-            `Human beings, 
+          defaultFunc(
+            b.text(
+              `Human beings, 
 like any other component or 
      subsystem, must be
 localized in a system architecture 
@@ -240,7 +247,8 @@ the proper code, can be constructed
 for processing
 signals 
     in a common language.`,
-            { translate: [0.1, 0.8], scale: 0.9 }
+              { translate: [0.1, 0.8], scale: 0.9 }
+            )
           ),
         b =>
           b.eval(

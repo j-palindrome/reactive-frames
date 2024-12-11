@@ -1,5 +1,6 @@
-import { Canvas } from '@react-three/fiber'
+import { Canvas, useFrame } from '@react-three/fiber'
 import { useRef } from 'react'
+import { Color } from 'three'
 
 export default function Asemic(props: React.PropsWithChildren) {
   const points = useRef<[number, number][]>([])
@@ -8,7 +9,7 @@ export default function Asemic(props: React.PropsWithChildren) {
     <>
       <Canvas
         style={{ height: '100%', width: '100%' }}
-        gl={{ antialias: true }}
+        gl={{ antialias: true, alpha: true }}
         orthographic
         camera={{
           position: [0, 0, 0],
@@ -35,9 +36,13 @@ export default function Asemic(props: React.PropsWithChildren) {
 
           window.navigator.clipboard.writeText(text)
         }}>
-        <color attach='background' args={['#000000']} />
+        <Scene />
         {props.children}
       </Canvas>
     </>
   )
+}
+
+function Scene() {
+  return <></>
 }

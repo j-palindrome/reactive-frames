@@ -132,28 +132,8 @@ export default function ParticlesTest() {
   })
 
   return (
-    <Reactive progress={t => (t * 20) % 1}>
-      <Asemic name='a'>
-        <Brush
-          render={kf}
-          name='b'
-          defaults={{
-            a: 1,
-            size: [1, 1]
-          }}
-          recalculate
-          modifyIncludes={
-            /*glsl*/ `
-`
-          }
-          modifyPosition={
-            /*glsl*/ `
-position = 
-return position;
-          `
-          }
-        />
-      </Asemic>
-    </Reactive>
+    <Asemic>
+      <Brush render={b => b.text('testing')} />
+    </Asemic>
   )
 }

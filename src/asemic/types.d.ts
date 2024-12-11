@@ -17,18 +17,18 @@ declare global {
     translate?: [number, number] | PointBuilder
     scale?: [number, number] | number | PointBuilder
     rotate?: number
-    origin?: [number, number] | PointBuilder
     remap?: [[number, number] | PointBuilder, [number, number] | PointBuilder]
+    new?: 'group' | 'curve'
   }
 
   type CoordinateSettings = {
-    strength?: number
-    thickness?: number
-    color?: [number, number, number]
-    alpha?: number
+    strength: number
+    thickness: number
+    color: [number, number, number] | Color
+    alpha: number
   }
 
-  type CoordinateData = PreTransformData & CoordinateSettings
+  type CoordinateData = PreTransformData & Partial<CoordinateSettings>
 
   type GroupData = {
     curves: PointBuilder[][]

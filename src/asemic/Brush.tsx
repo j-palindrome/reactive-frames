@@ -7,6 +7,7 @@ import { rotate2d } from '../../util/src/shaders/manipulation'
 import { useEventListener } from '../utilities/react'
 import Builder from './drawingSystem/Builder'
 import { useFrame } from '@react-three/fiber'
+import { useInterval } from '@/util/src/dom'
 
 type VectorList = [number, number]
 type Vector3List = [number, number, number]
@@ -17,33 +18,12 @@ export type Jitter = {
   a?: number
   rotation?: number
 }
-export type BrushSettings = {
-  spacing?: number
-  defaults?: Jitter
-  recalculate?: boolean | ((progress: number) => number)
-  modifyPosition?: string
-  modifyColor?: string
-  modifyIncludes?: string
-  render: ConstructorParameters<typeof Builder>[0]
-}
 
-export default function Brush(props: BrushSettings) {
-  let {
-    spacing = 1,
-    defaults,
-    modifyPosition = `return position;`,
-    modifyIncludes = ``,
-    modifyColor = `return color;`,
-    render
-  } = props
-  defaults = {
-    size: [1, 1],
-    hsl: [100, 100, 100],
-    a: 100,
-    position: [0, 0],
-    rotation: 0,
-    ...defaults
-  }
+export default function Brush({
+  render
+}: {
+  render: ConstructorParameters<typeof Builder>[0]
+}) {
   const keyframes = new Builder(render)
 
   useEventListener(
@@ -65,10 +45,12 @@ export default function Brush(props: BrushSettings) {
     thicknessTex,
     groups,
     transform,
-    dimensions
+    dimensions,
+    settings
   } = lastData
+
+  const { modifyIncludes, modifyPosition, modifyColor } = settings
   const meshRef = useRef<THREE.Group>(null!)
-  const lastProgress = useRef(0)
   const maxCurveLength = resolution.length() * 2
 
   const updateChildren = (newData: typeof lastData) => {
@@ -119,9 +101,17 @@ export default function Brush(props: BrushSettings) {
     updateChildren(lastData)
   }, [lastData])
 
-  // useFrame(() => {
-  //   reInitialize()
-  // })
+  // useEffect(() => {
+  //   let timeout
+  //   const reinit = () => {
+  //     reInitialize()
+  //     timeout = window.setTimeout(reinit, Math.random() * 100)
+  //   }
+  //   reinit()
+  //   return () => window.clearTimeout(timeout)
+  // }, [])
+
+  console.log(lastData.curveCounts)
 
   return (
     <group
@@ -136,7 +126,7 @@ export default function Brush(props: BrushSettings) {
           rotation={[0, 0, group.transform.rotate]}
           key={i + now()}
           args={[undefined, undefined, maxCurveLength]}>
-          <planeGeometry args={[defaults.size![0], defaults.size![1]]} />
+          <planeGeometry args={lastData.settings.defaults.size} />
           <shaderMaterial
             transparent
             uniforms={{
@@ -270,7 +260,7 @@ void main() {
         curveProgress)
       + rotate2d(
         position.xy * pixel
-        * vec2(thickness, 1), 
+        * vec2(thickness), 
         point.rotation + 1.5707) 
         / aspectRatio 
         / scaleCorrection,

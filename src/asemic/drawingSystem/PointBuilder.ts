@@ -4,24 +4,14 @@ const vector = new Vector2()
 const vector2 = new Vector2()
 
 export class PointBuilder extends Vector2 {
-  strength: number
-  color?: [number, number, number]
-  alpha?: number
-  thickness?: number
+  strength?: CoordinateSettings['strength']
+  color?: CoordinateSettings['color']
+  alpha?: CoordinateSettings['alpha']
+  thickness?: CoordinateSettings['thickness']
 
   constructor(
     point: [number, number] = [0, 0],
-    {
-      strength = 0,
-      color,
-      alpha,
-      thickness = 1
-    }: {
-      strength?: number
-      color?: [number, number, number]
-      alpha?: number
-      thickness?: number
-    } = {}
+    { strength, color, alpha, thickness }: Partial<CoordinateSettings> = {}
   ) {
     super(point[0], point[1])
     this.strength = strength

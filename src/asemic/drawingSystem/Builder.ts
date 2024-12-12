@@ -1,29 +1,26 @@
+import { lerp } from '@/util/src/math'
+import { last, max, min, range, sum } from 'lodash'
 import {
   AnyPixelFormat,
   ClampToEdgeWrapping,
   Color,
-  Curve,
   CurvePath,
-  Data3DTexture,
   DataTexture,
   FloatType,
   LineCurve,
   NearestFilter,
   QuadraticBezierCurve,
   RedFormat,
-  RepeatWrapping,
   RGBAFormat,
-  RGBFormat,
   Vector2
 } from 'three'
-import { PointBuilder } from './PointBuilder'
-import { cloneDeep, last, max, min, range, sum } from 'lodash'
-import { lerp, scale } from '@/util/src/math'
-import { multiBezierProgressJS } from '@/util/src/shaders/bezier'
-import Brush, { Jitter } from '../Brush'
 import invariant from 'tiny-invariant'
-import { e } from 'mathjs'
+import { Jitter } from '../Brush'
+import { PointBuilder } from './PointBuilder'
 
+const letters = 'abcdefghijklmnopqrstuvyxyz'.split('')
+const twoLines = 'abdfhjpqrtxy'.split('')
+const oneLine = 'clnos'.split('')
 const SHAPES: Record<string, Coordinate[]> = {
   circle: [
     [1, 0],
@@ -772,10 +769,11 @@ ${g.curves
     let lineCount = 0
     if (warp) this.setWarp(warp)
     for (let letter of str) {
+      let pickedLetter = letter
       if (this.letters[letter]) {
         this.transform({ translate: [0.1, 0], push: true })
           .newGroup()
-          .letter(letter)
+          .letter(pickedLetter)
       } else if (letter === '\n') {
         lineCount++
 

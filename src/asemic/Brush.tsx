@@ -54,6 +54,7 @@ export default function Brush({
   const maxCurveLength = resolution.length() * 2
 
   const updateChildren = (newData: typeof lastData) => {
+    if (!meshRef.current) return
     meshRef.current.rotation.set(0, 0, newData.transform.rotate)
     meshRef.current.scale.set(...newData.transform.scale.toArray(), 1)
     meshRef.current.position.set(...newData.transform.translate.toArray(), 0)
@@ -63,6 +64,7 @@ export default function Brush({
         THREE.PlaneGeometry,
         THREE.ShaderMaterial
       >
+      if (!newData.groups[i]) return
       child.material.uniforms.keyframesTex.value = newData.keyframesTex
       child.material.uniforms.colorTex.value = newData.colorTex
       child.material.uniforms.thicknessTex.value = newData.thicknessTex
@@ -71,6 +73,7 @@ export default function Brush({
         newData.groups[i].curveIndexes
       child.material.uniforms.controlPointCounts.value =
         newData.groups[i].controlPointCounts
+
       child.material.uniforms.resolution.value = resolution
       child.material.uniforms.dimensions.value = newData.dimensions
       child.count = newData.groups[i].totalCurveLength
@@ -91,6 +94,8 @@ export default function Brush({
     )
     const newData = keyframes.reInitialize(resolution)
     if (!isEqual(newData.curveCounts, lastData.curveCounts)) {
+      console.log('reinit')
+
       setLastData(newData)
     } else {
       updateChildren(newData)
@@ -105,7 +110,7 @@ export default function Brush({
     let timeout
     const reinit = () => {
       reInitialize()
-      timeout = window.setTimeout(reinit, Math.random() * 100)
+      timeout = window.setTimeout(reinit, Math.random() * 250)
     }
     reinit()
     return () => window.clearTimeout(timeout)

@@ -3,13 +3,11 @@ import { useEffect, useRef, useState } from 'react'
 import Asemic from '../../../src/asemic/Asemic'
 import Brush from '../../../src/asemic/Brush'
 import { useEventListener } from '../../../src/utilities/react'
-import { Slide } from '../../../src/asemic/SlideDeck'
-import { now } from 'lodash'
 import Builder from '../../../src/asemic/drawingSystem/Builder'
 import { Color } from 'three'
 import { slides } from './slides'
 
-export default function DigiRis() {
+export default function NYU() {
   const [currentChild, setCurrentChild] = useState(0)
   const canvasRef = useRef<HTMLCanvasElement>(null!)
   const hydraRef = useRef<Hydra>(null!)
@@ -29,14 +27,18 @@ export default function DigiRis() {
     }
   })
 
+  useEffect(() => {
+    hydraRef.current.synth.s0.initScreen()
+  }, [])
+
   const defaultFunc = (b: Builder) =>
     // @ts-ignore
     b.setWarp({ thickness: 2, color: new Color('pink') })
 
-  // useEffect(() => {
-  //   const hydra = hydraRef.current.synth
-  //   slides[currentChild]?.(hydra.src(hydra.s0)).out()
-  // }, [currentChild])
+  useEffect(() => {
+    const hydra = hydraRef.current.synth
+    slides[currentChild]?.hydra?.(hydra.src(hydra.s0)).out()
+  }, [currentChild])
 
   useEventListener(
     'keydown',

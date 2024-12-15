@@ -1,6 +1,5 @@
-import { Canvas, useFrame } from '@react-three/fiber'
+import { Canvas } from '@react-three/fiber'
 import { useRef } from 'react'
-import { Color } from 'three'
 
 export default function Asemic(props: React.PropsWithChildren) {
   const points = useRef<[number, number][]>([])
@@ -33,7 +32,6 @@ export default function Asemic(props: React.PropsWithChildren) {
             .map(x => `[${x[0].toFixed(2)}, ${x[1].toFixed(2)}]`)
             .join(', ')
           console.log(point.map(x => x.toFixed(2)))
-
           window.navigator.clipboard.writeText(text)
         }}>
         <Scene />

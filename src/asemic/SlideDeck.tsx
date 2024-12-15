@@ -1,5 +1,5 @@
 import { Children, useState } from 'react'
-import { useEventListener } from '../../../src/utilities/react'
+import { useEventListener } from '../utilities/react'
 import invariant from 'tiny-invariant'
 
 export default function SlideDeck({
@@ -19,6 +19,13 @@ export default function SlideDeck({
       </div>
     </div>
   )
+}
+
+export function Citation({
+  id,
+  children
+}: React.PropsWithChildren & { id: string }) {
+  return <div>{children}</div>
 }
 
 export function Slide({ children }: React.PropsWithChildren) {

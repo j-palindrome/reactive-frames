@@ -1,12 +1,17 @@
+import { Hydra } from 'hydra-ts'
 import Builder from '../../../src/asemic/drawingSystem/Builder'
 
 export const slides: {
   asemic?: ((b: Builder) => Builder)[]
+  hydra?: (h: any) => any
   slide?: JSX.Element
 }[] = [
-  {},
+  {
+    hydra: src => src
+  },
   // Rich Text, Poor Image
   {
+    hydra: src => src.saturate(0).contrast(5),
     asemic: [
       b =>
         b.text('tree', {

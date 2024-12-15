@@ -8,6 +8,7 @@ import { useEventListener } from '../utilities/react'
 import Builder from './drawingSystem/Builder'
 import { useFrame } from '@react-three/fiber'
 import { useInterval } from '@/util/src/dom'
+import { Group } from 'pts'
 
 type VectorList = [number, number]
 type Vector3List = [number, number, number]
@@ -19,13 +20,7 @@ export type Jitter = {
   rotation?: number
 }
 
-export default function Brush({
-  render
-}: {
-  render: ConstructorParameters<typeof Builder>[0]
-}) {
-  const keyframes = new Builder(render)
-
+export default function Brush({ keyframe }: { keyframe: Group[] }) {
   useEventListener(
     'resize',
     () => {
@@ -38,7 +33,9 @@ export default function Brush({
     window.innerHeight * window.devicePixelRatio
   )
 
-  const [lastData, setLastData] = useState(keyframes.reInitialize(resolution))
+  const packToTexture = () => {}
+
+  const [lastData, setLastData] = useState(packToTexture())
   const {
     keyframesTex,
     colorTex,
@@ -86,21 +83,6 @@ export default function Brush({
       child.rotation.set(0, 0, rotate)
     })
   }
-
-  const reInitialize = useCallback(() => {
-    const resolution = new Vector2(
-      window.innerWidth * window.devicePixelRatio,
-      window.innerHeight * window.devicePixelRatio
-    )
-    const newData = keyframes.reInitialize(resolution)
-    if (!isEqual(newData.curveCounts, lastData.curveCounts)) {
-      console.log('reinit')
-
-      setLastData(newData)
-    } else {
-      updateChildren(newData)
-    }
-  }, [lastData])
 
   useEffect(() => {
     updateChildren(lastData)

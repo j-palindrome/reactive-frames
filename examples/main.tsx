@@ -5,9 +5,10 @@ import './src/index.css'
 import DigiRis from './src/digital-resistance/digiris'
 import NYU from './src/nyu/nyu'
 import PtsTest from './src/ptsTest'
+import PerfArt from './src/perf-art/perfart'
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <PtsTest />
+    <DigiRis />
   </React.StrictMode>
 )

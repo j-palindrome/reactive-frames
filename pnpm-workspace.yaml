@@ -1,3 +1,4 @@
 packages:
   - 'examples'
   - 'hydra-generator-ts'
+  - 'asemic'

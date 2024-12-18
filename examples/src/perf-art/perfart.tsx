@@ -1,6 +1,8 @@
 import { useState } from 'react'
-import Asemic from '../../../src/asemic/Asemic'
+import Asemic from '../../../asemic/src/Asemic'
 import { useEventListener } from '../../../src/utilities/react'
+import { slides } from './slides'
+import Brush from '../../../asemic/src/Brush'
 
 export default function PerfArt() {
   const [currentChild, setCurrentChild] = useState(0)
@@ -20,5 +22,11 @@ export default function PerfArt() {
     },
     [currentChild]
   )
-  return <Asemic>{}</Asemic>
+  return (
+    <Asemic>
+      {slides[currentChild]?.asemic?.map((c, i) => (
+        <Brush key={currentChild + '-' + i} render={c} />
+      ))}
+    </Asemic>
+  )
 }

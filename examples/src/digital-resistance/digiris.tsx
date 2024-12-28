@@ -1,12 +1,12 @@
 import Hydra from 'hydra-synth'
 import { useEffect, useRef, useState } from 'react'
 import Asemic from '../../../asemic/src/Asemic'
-import Brush from '../../../asemic/src/Brush'
 import { useEventListener } from '../../../src/utilities/react'
 import { now } from 'lodash'
 import Builder from '../../../asemic/src/drawingSystem/Builder'
 import { Color } from 'three'
 import { slides } from './slides'
+import Brush from '../../../asemic/src/drawingSystem/Brush'
 
 export default function DigiRis() {
   const [currentChild, setCurrentChild] = useState(0)
